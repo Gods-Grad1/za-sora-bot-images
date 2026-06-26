@@ -43,7 +43,7 @@ def fetch_csv_cached(bot, url, duration=300):
         if now - timestamp < duration:
             return data
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=10, proxies={})
         response.encoding = 'utf-8'
         lines = response.text.splitlines()
         rows = list(csv.reader(lines))
@@ -60,14 +60,12 @@ def fetch_csv_cached(bot, url, duration=300):
 # ---------------------------------------------------------------------------
 
 def _now_month_key():
-    """Returns current month as 'YYYY-MM' string."""
     return datetime.datetime.now().strftime("%Y-%m")
 
 def _now_year_key():
     return str(datetime.datetime.now().year)
 
 def get_user(data, chat_str, user_str, username):
-    """Ensures user entry exists with all required fields."""
     if chat_str not in data:
         data[chat_str] = {}
     if user_str not in data[chat_str]:
@@ -93,7 +91,6 @@ def get_user(data, chat_str, user_str, username):
             "powerups":        {},
         }
     u = data[chat_str][user_str]
-    # Backfill missing fields for existing users
     defaults = {
         "monthly_points": {}, "yearly_points": {}, "alltime_points": 0,
         "streak": 0, "best_streak": 0, "games_played": 0, "correct": 0,
@@ -110,7 +107,6 @@ def get_user(data, chat_str, user_str, username):
     return u
 
 def track_member(bot, chat_id, user_id, username):
-    """Passive member tracking — called on every message."""
     data = load_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
@@ -135,20 +131,17 @@ def reward_user(bot, chat_id, user_id, username, amount=50):
     user_str = str(user_id)
     u        = get_user(data, chat_str, user_str, username)
 
-    # Streak
     u["streak"]  += 1
     u["correct"] += 1
     if u["streak"] > u["best_streak"]:
         u["best_streak"] = u["streak"]
 
-    # Multipliers
     multiplier = get_streak_multiplier(u["streak"])
     if u.get("double_xp_until") and time.time() < u["double_xp_until"]:
         multiplier *= 2
 
     final = int(amount * multiplier)
 
-    # Add to all point buckets
     month_key = _now_month_key()
     year_key  = _now_year_key()
     u["points"]                              += final
@@ -158,14 +151,10 @@ def reward_user(bot, chat_id, user_id, username, amount=50):
     u["games_played"]                        += 1
 
     save_json(bot, config.GROUP_DATA_FILE, data)
-
-    # Check achievements
     check_achievements(bot, chat_id, user_id, username)
-
     return u["points"], u["streak"], multiplier, final
 
 def penalise_wrong(bot, chat_id, user_id, username):
-    """Break streak on wrong answer."""
     data     = load_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
@@ -188,7 +177,6 @@ def deduct_points(bot, chat_id, user_id, username, amount):
 # ---------------------------------------------------------------------------
 
 def use_powerup(bot, chat_id, user_id, username, powerup_id):
-    """Uses one powerup. Returns True if available."""
     data = load_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
@@ -213,7 +201,6 @@ def add_powerup(bot, chat_id, user_id, username, powerup_id, count=1):
 # ---------------------------------------------------------------------------
 
 def unlock_badge(bot, chat_id, user_id, username, badge_id):
-    """Unlocks a badge for a user if they don't already have it."""
     data = load_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
@@ -226,7 +213,6 @@ def unlock_badge(bot, chat_id, user_id, username, badge_id):
     return False
 
 def check_achievements(bot, chat_id, user_id, username):
-    """Checks if the user qualifies for any new achievements based on their stats."""
     data = load_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
@@ -247,7 +233,6 @@ def check_achievements(bot, chat_id, user_id, username):
             unlocked.append(badge_id)
     if unlocked:
         save_json(bot, config.GROUP_DATA_FILE, data)
-        # Send notification
         badge_names = [config.ACHIEVEMENTS[b]["icon"] + " " + config.ACHIEVEMENTS[b]["name"] for b in unlocked]
         bot.send_message(chat_id, f"🏅 *ACHIEVEMENT UNLOCKED!*\n\n{username} unlocked: {', '.join(badge_names)}!", parse_mode="Markdown")
     return unlocked
@@ -263,7 +248,6 @@ def save_mutes(bot, data):
     save_json(bot, config.MUTE_FILE, data)
 
 def mute_user(bot, chat_id, user_id, username, duration_seconds):
-    """Mutes a user for the given duration."""
     data = load_mutes()
     key = f"{chat_id}_{user_id}"
     data[key] = {
@@ -284,21 +268,16 @@ def unmute_user(bot, chat_id, user_id):
     return False
 
 def is_muted(chat_id, user_id):
-    """Returns True if the user is muted and the mute hasn't expired."""
     data = load_mutes()
     key = f"{chat_id}_{user_id}"
     if key not in data:
         return False
     if time.time() > data[key]["expires"]:
-        # Auto-cleanup expired mute
         del data[key]
-        # We'll save on next call, or we can save now
-        # But we need a bot instance to save. We'll rely on the caller to save.
         return False
     return True
 
 def cleanup_expired_mutes(bot):
-    """Removes all expired mutes."""
     data = load_mutes()
     changed = False
     now = time.time()
@@ -320,19 +299,17 @@ def save_broadcasts(bot, data):
     save_json(bot, config.BROADCAST_FILE, data)
 
 def add_broadcast(bot, chat_id, message, send_time):
-    """Adds a broadcast to the queue."""
     data = load_broadcasts()
     data.append({
         "chat_id": chat_id,
         "message": message,
-        "send_time": send_time,  # Unix timestamp
+        "send_time": send_time,
         "sent": False,
     })
     save_broadcasts(bot, data)
-    return len(data) - 1  # index
+    return len(data) - 1
 
 def get_pending_broadcasts():
-    """Returns all unsent broadcasts that are due."""
     data = load_broadcasts()
     now = time.time()
     pending = [b for b in data if not b.get("sent", False) and b["send_time"] <= now]
@@ -349,10 +326,6 @@ def mark_broadcast_sent(bot, index):
 # ---------------------------------------------------------------------------
 
 def get_leaderboard(chat_id, mode="monthly", top_n=10):
-    """
-    mode: 'monthly' | 'yearly' | 'alltime'
-    Returns list of (rank, username, points, streak, title) sorted by points desc.
-    """
     data     = load_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     if chat_str not in data:
@@ -392,13 +365,11 @@ def _get_active_title(u):
 # ---------------------------------------------------------------------------
 
 def purchase_item(bot, chat_id, user_id, username, item_id):
-    """Returns (success, message)."""
     data     = load_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
     u        = get_user(data, chat_str, user_str, username)
 
-    # Check if it's a powerup
     if item_id in config.POWERUPS:
         powerup = config.POWERUPS[item_id]
         if u["points"] < powerup["cost"]:
@@ -409,7 +380,6 @@ def purchase_item(bot, chat_id, user_id, username, item_id):
         save_json(bot, config.GROUP_DATA_FILE, data)
         return True, f"✅ Purchased *{powerup['emoji']} {powerup['name']}* for {powerup['cost']} points!"
 
-    # Regular shop items
     item = next((i for i in config.SHOP_TITLES if i["id"] == item_id), None)
     if not item:
         return False, "Item not found."
@@ -430,7 +400,6 @@ def purchase_item(bot, chat_id, user_id, username, item_id):
         save_json(bot, config.GROUP_DATA_FILE, data)
         return True, f"🎁 Mystery Box opened! You won *{prize} points*!"
     else:
-        # It's a title
         u["title"]         = item["name"]
         u["title_expires"] = time.time() + (config.SHOP_TITLE_DURATION_DAYS * 86400)
 
@@ -438,7 +407,6 @@ def purchase_item(bot, chat_id, user_id, username, item_id):
     return True, f"✅ Purchased *{item['name']}* for {item['cost']} points!"
 
 def use_hint_token(bot, chat_id, user_id, username):
-    """Uses one hint token. Returns True if available."""
     data     = load_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
@@ -454,16 +422,14 @@ def use_hint_token(bot, chat_id, user_id, username):
 # ---------------------------------------------------------------------------
 
 def check_and_run_monthly_reset(bot):
-    """Call this on startup and daily — handles announcing + resetting monthly scores."""
     state = load_json(config.STATE_FILE, {})
     now   = datetime.datetime.now()
     last  = state.get("last_monthly_reset", "")
     curr  = now.strftime("%Y-%m")
 
     if last == curr:
-        return  # Already reset this month
+        return
 
-    # Announce winners for each group before reset
     data = load_json(config.GROUP_DATA_FILE, {})
     prev_month = (now.replace(day=1) - datetime.timedelta(days=1)).strftime("%Y-%m")
 
@@ -494,7 +460,6 @@ def check_and_run_monthly_reset(bot):
     save_json(bot, config.STATE_FILE, state)
 
 def check_and_run_yearly_reset(bot):
-    """Handles yearly reset on Jan 1st."""
     state = load_json(config.STATE_FILE, {})
     now   = datetime.datetime.now()
     curr  = now.strftime("%Y")
@@ -536,7 +501,6 @@ def check_and_run_yearly_reset(bot):
 # ---------------------------------------------------------------------------
 
 def get_all_members(chat_id):
-    """Returns list of (user_id, username) for all tracked members."""
     data     = load_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     if chat_str not in data:
