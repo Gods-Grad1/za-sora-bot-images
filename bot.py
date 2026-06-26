@@ -4,15 +4,20 @@ import datetime
 from datetime import timezone
 import threading
 import telebot
+from telebot import apihelper
 from telebot.types import InputMediaPhoto
 import config
 import database
 import graphics
 import games
 
-# Override proxy settings (fix for PythonAnywhere)
+# Force no proxy
 os.environ['HTTP_PROXY'] = ''
 os.environ['HTTPS_PROXY'] = ''
+os.environ['http_proxy'] = ''
+os.environ['https_proxy'] = ''
+os.environ['NO_PROXY'] = '*'
+apihelper.proxy = None
 
 bot = telebot.TeleBot(config.API_TOKEN)
 
@@ -51,7 +56,6 @@ def local_now():
     return datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2)
 
 def schedule_delete(chat_id, message_id, delay=config.AUTO_DELETE_DELAY):
-    """Schedules a message for deletion after delay seconds."""
     def delete():
         try:
             bot.delete_message(chat_id, message_id)
@@ -62,7 +66,7 @@ def schedule_delete(chat_id, message_id, delay=config.AUTO_DELETE_DELAY):
     timer.start()
 
 # ---------------------------------------------------------------------------
-# HELP MENU
+# HELP MENU (5 Categories)
 # ---------------------------------------------------------------------------
 
 def _build_help_menu():
@@ -70,10 +74,10 @@ def _build_help_menu():
     markup = telebot.types.InlineKeyboardMarkup(row_width=2)
     markup.add(
         telebot.types.InlineKeyboardButton("🎮 Games", callback_data="help_games"),
-        telebot.types.InlineKeyboardButton("🏆 Rankings", callback_data="help_rankings"),
-        telebot.types.InlineKeyboardButton("🛒 Shop", callback_data="help_shop"),
-        telebot.types.InlineKeyboardButton("💡 Points & Streaks", callback_data="help_points"),
-        telebot.types.InlineKeyboardButton("📋 Info", callback_data="help_info"),
+        telebot.types.InlineKeyboardButton("🏆 Rankings & Stats", callback_data="help_rankings"),
+        telebot.types.InlineKeyboardButton("🛒 Shop & Power-ups", callback_data="help_shop"),
+        telebot.types.InlineKeyboardButton("📋 Info & Tools", callback_data="help_info"),
+        telebot.types.InlineKeyboardButton("⚙️ Admin", callback_data="help_admin"),
     )
     return markup
 
@@ -83,49 +87,48 @@ def _get_help_text(category):
             "🎮 *GAMES*\n\n"
             "/game — Guess the Character\n"
             "/year — Guess the Release Year\n"
-            "/trivia — Random trivia question\n"
-            "/trivia Gaming — Trivia by category\n"
             "/picture — Scrambled Image Guessing\n"
-            "/versus @user — Challenge someone to a duel\n"
-            "/forfeit — Concede an active versus match\n"
-            "/hint — Get a hint during a game\n"
-            "/stop — Stop the current game"
+            "/trivia — Trivia (choose category)\n"
+            "/spin — Wheel of Fortune\n"
+            "/versus @user — Challenge someone to a duel"
         ),
         "rankings": (
             "🏆 *RANKINGS & STATS*\n\n"
-            "/leaderboard — View monthly/yearly/all-time rankings\n"
-            "/mystats — View your personal stats\n"
-            "/profile @user — View someone's profile card"
+            "/leaderboard — View global rankings\n"
+            "/mystats — Text version of your stats\n"
+            "/myprofile — Image profile card (yourself)\n"
+            "/viewstats @user — Text stats of mentioned user\n"
+            "/viewprofile @user — Image profile card of mentioned user"
         ),
         "shop": (
-            "🛒 *SHOP*\n\n"
-            "/shop — Spend your points on titles & items\n\n"
-            "Titles expire after 30 days.\n"
-            "Special items are instant!\n\n"
+            "🛒 *SHOP & POWER-UPS*\n\n"
+            "/shop — Spend your points on titles & items\n"
+            "/powerups — View your power-ups\n\n"
             "Power-ups:\n"
             "✂️ 50/50 — Removes two wrong trivia answers\n"
             "🧊 Streak Freeze — Protects your streak once\n"
             "⬆️ Double Down — Double points on next correct"
         ),
-        "points": (
-            "💡 *POINTS & STREAKS*\n\n"
-            "Character/Year game: 50 pts\n"
-            "Trivia: 75 pts\n"
-            "Versus win: 100 pts\n"
-            "Daily challenge: 150 pts\n"
-            "Wheel of Fortune: Random!\n\n"
-            "🔥 Streak multipliers:\n"
-            "• 3 in a row → x2\n"
-            "• 5 in a row → x3\n"
-            "• 10 in a row → x5"
-        ),
         "info": (
-            "📋 *INFO*\n\n"
-            "/categories — View trivia categories\n"
-            "/table — League standings\n"
-            "/fixtures — Match fixtures\n"
-            "/spin — Daily Wheel of Fortune\n"
-            "/start — Welcome message & how to play"
+            "📋 *INFO & TOOLS*\n\n"
+            "/table — League standings (image)\n"
+            "/fixtures — Match fixtures (image)\n"
+            "/crewbanner — Crew collage of all members"
+        ),
+        "admin": (
+            "⚙️ *ADMIN COMMANDS*\n\n"
+            "/admin — Admin control panel\n"
+            "/tagall — Tag all members\n"
+            "/setschedule — Configure auto-game scheduler\n"
+            "/mute @user 1h — Mute a user\n"
+            "/unmute @user — Unmute a user\n"
+            "/broadcast YYYY-MM-DD HH:MM msg — Schedule a broadcast\n"
+            "/uploadtrivia — Upload trivia questions (file)\n"
+            "/checkimages — Check for missing images\n"
+            "/testbroadcast — Test broadcast system\n"
+            "/crewbanner — Generate crew banner\n"
+            "/rebuildcache — Rebuild image cache\n"
+            "/testmorning — Test morning message"
         ),
     }
     return texts.get(category, "Unknown category.")
@@ -229,7 +232,7 @@ def show_leaderboard(message):
     bot.send_chat_action(message.chat.id, 'upload_photo')
     mode = "monthly"
     page = 1
-    all_entries = database.get_leaderboard(message.chat.id, mode=mode, top_n=100)
+    all_entries = database.get_leaderboard(mode=mode, top_n=100)
     total_pages = (len(all_entries) + 9) // 10
     img = graphics.build_leaderboard_image(message.chat.id, mode, page)
     if img:
@@ -365,6 +368,8 @@ def show_admin_panel(message):
         telebot.types.InlineKeyboardButton("📊 Stats",                 callback_data="admin_stats"),
         telebot.types.InlineKeyboardButton("🔇 Mute User",             callback_data="admin_mute"),
         telebot.types.InlineKeyboardButton("📢 Broadcast",             callback_data="admin_broadcast"),
+        telebot.types.InlineKeyboardButton("🔍 Check Images",          callback_data="admin_checkimages"),
+        telebot.types.InlineKeyboardButton("👥 Crew Banner",           callback_data="admin_crewbanner"),
     )
     sched = load_scheduler()
     status_icon = "✅" if sched.get("enabled") else "❌"
@@ -413,12 +418,8 @@ def show_schedule_panel(chat_id):
     )
 
 def show_stats(chat_id):
-    data = database.load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    if chat_str not in data:
-        bot.send_message(chat_id, "📊 No stats yet.")
-        return
-    users = data[chat_str]
+    data = database.load_json(config.USER_DATA_FILE, {})
+    users = data
     total_games  = sum(u.get("games_played", 0) for u in users.values())
     total_pts    = sum(u.get("alltime_points", 0) for u in users.values())
     most_active  = max(users.values(), key=lambda u: u.get("games_played", 0), default=None)
@@ -442,20 +443,20 @@ def show_stats(chat_id):
 
 def send_weekly_recap(bot):
     groups = database.get_all_groups()
+    lb = database.get_leaderboard(mode="monthly", top_n=3)
+    top3 = ""
+    if lb:
+        medals = ["🥇", "🥈", "🥉"]
+        for rank, username, points, streak, title in lb:
+            top3 += f"{medals[rank-1]} {username} — {points} pts\n"
+    else:
+        top3 = "No scores yet this month!\n"
+    msg = (
+        f"📊 *WEEKLY RECAP*\n\n"
+        f"🏆 *Monthly Top 3:*\n{top3}\n"
+        f"Keep up the great work, family! 🙏🔥"
+    )
     for group_id in groups:
-        lb = database.get_leaderboard(group_id, mode="monthly", top_n=3)
-        top3 = ""
-        if lb:
-            medals = ["🥇", "🥈", "🥉"]
-            for rank, username, points, streak, title in lb:
-                top3 += f"{medals[rank-1]} {username} — {points} pts\n"
-        else:
-            top3 = "No scores yet this month!\n"
-        msg = (
-            f"📊 *WEEKLY RECAP*\n\n"
-            f"🏆 *Monthly Top 3:*\n{top3}\n"
-            f"Keep up the great work, family! 🙏🔥"
-        )
         try:
             bot.send_message(group_id, msg, parse_mode="Markdown")
         except Exception as e:
@@ -475,7 +476,7 @@ def send_morning_message(bot):
     print(f"📊 Found {len(groups)} groups")
 
     for group_id in groups:
-        lb   = database.get_leaderboard(group_id, mode="monthly", top_n=3)
+        lb = database.get_leaderboard(mode="monthly", top_n=3)
         top3 = ""
         if lb:
             medals = ["🥇", "🥈", "🥉"]
@@ -530,16 +531,16 @@ def handle_document(message):
     state = database.load_json("upload_state.json", {})
     if not state.get("pending"):
         return
-    # Download the file
+    import requests
     file_info = bot.get_file(message.document.file_id)
     dl_url = f"https://api.telegram.org/file/bot{config.API_TOKEN}/{file_info.file_path}"
-    import requests
     try:
-        response = requests.get(dl_url, timeout=30)
+        response = requests.get(dl_url, timeout=30, proxies={})
         response.raise_for_status()
         content = response.content.decode('utf-8')
         filename = message.document.file_name.lower()
         if filename.endswith('.json'):
+            import json
             new_questions = json.loads(content)
         elif filename.endswith('.csv'):
             import csv
@@ -571,12 +572,21 @@ def welcome_new_member(message):
         database.track_member(bot, message.chat.id, member.id, username)
         members  = database.get_all_members(message.chat.id)
         tag_line = " ".join([f"[{n}](tg://user?id={uid})" for uid, n in members if uid != member.id])
-        welcome  = (
+        welcome = (
             f"{config.WELCOME_MSG}\n\n"
             f"👋 *Welcome [{username}](tg://user?id={member.id})!* "
             f"Say hi to the family 🌱\n{tag_line}"
         )
-        bot.send_message(message.chat.id, welcome, parse_mode="Markdown")
+        # Send welcome GIF if available
+        try:
+            if os.path.exists("images/welcome.gif"):
+                with open("images/welcome.gif", "rb") as f:
+                    bot.send_animation(message.chat.id, f, caption=welcome, parse_mode="Markdown")
+            else:
+                bot.send_message(message.chat.id, welcome, parse_mode="Markdown")
+        except Exception as e:
+            print(f"Welcome message failed: {e}")
+            bot.send_message(message.chat.id, welcome, parse_mode="Markdown")
 
 @bot.message_handler(func=lambda message: True)
 def handle_all_messages(message):
@@ -600,7 +610,15 @@ def handle_all_messages(message):
     args = message.text.split()[1:] if len(message.text.split()) > 1 else []
 
     if cmd == '/start':
-        bot.reply_to(message, config.WELCOME_MSG, parse_mode="Markdown")
+        try:
+            if os.path.exists("images/welcome.gif"):
+                with open("images/welcome.gif", "rb") as f:
+                    bot.send_animation(chat_id, f, caption=config.WELCOME_MSG, parse_mode="Markdown")
+            else:
+                bot.reply_to(message, config.WELCOME_MSG, parse_mode="Markdown")
+        except Exception as e:
+            print(f"Start GIF failed: {e}")
+            bot.reply_to(message, config.WELCOME_MSG, parse_mode="Markdown")
 
     elif cmd == '/help':
         show_help(message)
@@ -608,7 +626,14 @@ def handle_all_messages(message):
     elif cmd == '/mystats':
         show_my_stats(message)
 
-    elif cmd == '/profile':
+    elif cmd == '/myprofile':
+        img = graphics.build_profile_card(chat_id, user_id, username, bot=bot)
+        if img:
+            bot.send_photo(chat_id, img, caption="👤 *Your Profile*", parse_mode="Markdown")
+        else:
+            bot.reply_to(message, "❌ No data found.")
+
+    elif cmd == '/viewstats':
         if args and args[0].startswith('@'):
             target_mention = args[0].lstrip('@')
             members = database.get_all_members(chat_id)
@@ -617,18 +642,26 @@ def handle_all_messages(message):
                 bot.reply_to(message, "❌ User not found.")
                 return
             target_id, target_name = target
-            img = graphics.build_profile_card(chat_id, target_id, target_name)
-            caption = f"📊 *Profile — {target_name}*"
+            show_my_stats(message, target_id, target_name)
         else:
-            img = graphics.build_profile_card(chat_id, user_id, username)
-            caption = f"📊 *Your Profile*"
-        if img:
-            bot.send_photo(chat_id, img, caption=caption, parse_mode="Markdown")
-        else:
-            bot.reply_to(message, "❌ No data found for this user.")
+            bot.reply_to(message, "Usage: /viewstats @username")
 
-    elif cmd == '/categories':
-        show_categories(message)
+    elif cmd == '/viewprofile':
+        if args and args[0].startswith('@'):
+            target_mention = args[0].lstrip('@')
+            members = database.get_all_members(chat_id)
+            target = next((m for m in members if m[1].lower() == target_mention.lower()), None)
+            if not target:
+                bot.reply_to(message, "❌ User not found.")
+                return
+            target_id, target_name = target
+            img = graphics.build_profile_card(chat_id, target_id, target_name, bot=bot)
+            if img:
+                bot.send_photo(chat_id, img, caption=f"👤 *Profile — {target_name}*", parse_mode="Markdown")
+            else:
+                bot.reply_to(message, "❌ No data found for this user.")
+        else:
+            bot.reply_to(message, "Usage: /viewprofile @username")
 
     elif cmd == '/table':
         show_league_table(message)
@@ -643,7 +676,7 @@ def handle_all_messages(message):
         games.send_year_category_picker(bot, chat_id)
 
     elif cmd == '/picture':
-        games.send_character_category_picker(bot, chat_id)  # Reuse character categories
+        games.send_character_category_picker(bot, chat_id)
 
     elif cmd == '/trivia':
         games.send_trivia_category_picker(bot, chat_id)
@@ -662,64 +695,26 @@ def handle_all_messages(message):
     elif cmd == '/shop':
         show_shop(message)
 
-    elif cmd == '/spin':
-        # Wheel of Fortune
-        if database.is_muted(chat_id, user_id):
-            bot.reply_to(message, "🔇 You are muted! Wait until your mute expires.")
-            return
-        data = database.load_json(config.GROUP_DATA_FILE, {})
-        chat_str = str(chat_id)
+    elif cmd == '/powerups':
+        data = database.load_json(config.USER_DATA_FILE, {})
         user_str = str(user_id)
-        u = database.get_user(data, chat_str, user_str, username)
-        last_spin = u.get("last_spin", 0)
-        if time.time() - last_spin < 86400:
-            remaining = int((last_spin + 86400 - time.time()) / 60)
-            bot.reply_to(message, f"⏳ You already spun today! Come back in {remaining} minutes.")
+        if user_str not in data:
+            bot.reply_to(message, "💡 You don't have any power-ups.\n\nPurchase them from the shop!")
             return
-        import random
-        slots = config.WHEEL_SLOTS
-        total_weight = sum(slot["weight"] for slot in slots)
-        roll = random.randint(1, total_weight)
-        cumulative = 0
-        result = None
-        for slot in slots:
-            cumulative += slot["weight"]
-            if roll <= cumulative:
-                result = slot
-                break
-        if not result:
-            result = slots[0]
-        u["last_spin"] = time.time()
-        response = "🎰 *WHEEL OF FORTUNE*\n\n"
-        if result.get("points"):
-            points = result["points"]
-            data = database.load_json(config.GROUP_DATA_FILE, {})
-            user_data = database.get_user(data, chat_str, user_str, username)
-            user_data["points"] += points
-            user_data["alltime_points"] += points
-            month_key = database._now_month_key()
-            year_key = database._now_year_key()
-            user_data["monthly_points"][month_key] = user_data["monthly_points"].get(month_key, 0) + points
-            user_data["yearly_points"][year_key] = user_data["yearly_points"].get(year_key, 0) + points
-            database.save_json(bot, config.GROUP_DATA_FILE, data)
-            response += f"🎉 You won *{points} points*!"
-        elif result.get("hint_token"):
-            tokens = result["hint_token"]
-            u["hint_tokens"] = u.get("hint_tokens", 0) + tokens
-            database.save_json(bot, config.GROUP_DATA_FILE, data)
-            response += f"💡 You won *{tokens} hint token(s)*!"
-        elif result.get("double_xp"):
-            duration = result["double_xp"]
-            u["double_xp_until"] = time.time() + duration
-            database.save_json(bot, config.GROUP_DATA_FILE, data)
-            response += f"⚡ You won *Double XP for 1 hour*!"
-        elif result.get("bankrupt"):
-            u["points"] = max(0, u["points"] - 10)
-            database.save_json(bot, config.GROUP_DATA_FILE, data)
-            response += f"💸 *BANKRUPT!* You lost 10 points. 😱"
-        else:
-            response += f"🎁 You won *{result['name']}*!"
-        bot.reply_to(message, response, parse_mode="Markdown")
+        u = data[user_str]
+        powerups = u.get("powerups", {})
+        if not powerups:
+            bot.reply_to(message, "💡 You don't have any power-ups.\n\nPurchase them from the shop!")
+            return
+        text = "⚡ *Your Power-Ups*\n\n"
+        for pid, count in powerups.items():
+            if count > 0:
+                name = config.POWERUPS.get(pid, {}).get("emoji", "⚡") + " " + pid.replace("_", " ").title()
+                text += f"{name}: x{count}\n"
+        bot.reply_to(message, text, parse_mode="Markdown")
+
+    elif cmd == '/spin':
+        handle_spin(message)
 
     elif cmd == '/versus':
         if not args:
@@ -753,7 +748,35 @@ def handle_all_messages(message):
         else:
             bot.reply_to(message, "❌ Admin only.")
 
-    # Mute commands
+    elif cmd == '/checkimages' and is_admin(user_id):
+        bot.reply_to(message, "🔍 Checking for missing images...")
+        notify_missing_images()
+        bot.reply_to(message, "✅ Check complete. Admin has been notified of any missing images.")
+
+    elif cmd == '/testbroadcast' and is_admin(user_id):
+        msg = "🧪 *Test Broadcast*\n\nThis is a test of the broadcast system. If you received this, it's working! 🎉"
+        bot.reply_to(message, "📤 Sending test broadcast...")
+        groups = database.get_all_groups()
+        for gid in groups:
+            try:
+                bot.send_message(gid, msg, parse_mode="Markdown")
+            except Exception as e:
+                print(f"Test broadcast failed for {gid}: {e}")
+        bot.reply_to(message, "✅ Test broadcast sent to all groups.")
+
+    elif cmd == '/crewbanner' and is_admin(user_id):
+        bot.reply_to(message, "👥 Generating crew banner...")
+        img = graphics.build_crew_banner(chat_id, bot)
+        if img:
+            bot.send_photo(chat_id, img, caption="👥 *CREW BANNER*", parse_mode="Markdown")
+        else:
+            bot.reply_to(message, "❌ No members found to generate banner.")
+
+    elif cmd == '/rebuildcache' and is_admin(user_id):
+        bot.reply_to(message, "🔄 Rebuilding image cache...")
+        threading.Thread(target=graphics.clear_and_rebuild_disk_cache, args=(bot,), daemon=True).start()
+        bot.reply_to(message, "🔄 Cache rebuild started in background.")
+
     elif cmd == '/mute' and is_admin(user_id):
         if len(args) < 2:
             bot.reply_to(message, "Usage: /mute @username 1h  (or 10m, 24h, etc.)")
@@ -795,7 +818,6 @@ def handle_all_messages(message):
         else:
             bot.reply_to(message, f"❌ {target_name} was not muted.")
 
-    # Upload trivia
     elif cmd == '/uploadtrivia' and is_admin(user_id):
         bot.reply_to(message, "📤 Send me a JSON or CSV file with trivia questions.\n\n"
                               "JSON format: `[{\"category\":\"Gaming\",\"question\":\"...\",\"options\":[\"A\",\"B\",\"C\",\"D\"],\"answer\":\"A\"}]`\n"
@@ -803,14 +825,12 @@ def handle_all_messages(message):
         database.save_json(bot, "upload_state.json", {"user_id": user_id, "chat_id": chat_id, "pending": True})
         return
 
-    # Broadcast
     elif cmd == '/broadcast' and is_admin(user_id):
         if len(args) < 2:
             bot.reply_to(message, "Usage: /broadcast [time] [message]\n\n"
                                   "Time format: '2024-12-25 08:00' (UTC+2)\n"
                                   "Example: /broadcast 2024-12-25 08:00 Merry Christmas everyone!")
             return
-        # Parse time and message
         time_str = args[0] + " " + args[1]
         try:
             send_time = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M").timestamp()
@@ -827,7 +847,6 @@ def handle_all_messages(message):
         database.add_broadcast(bot, chat_id, message_text, send_time)
         bot.reply_to(message, f"✅ Broadcast scheduled for {time_str}.")
 
-    # Quote management
     elif cmd == '/addquote' and chat_id == user_id and is_admin(user_id):
         if not args:
             bot.reply_to(message, "Usage: /addquote [quote text]")
@@ -873,6 +892,79 @@ def handle_all_messages(message):
         show_schedule_panel(chat_id)
 
 # ---------------------------------------------------------------------------
+# SPIN WHEEL HANDLER
+# ---------------------------------------------------------------------------
+
+def handle_spin(message):
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    username = message.from_user.username or message.from_user.first_name
+
+    if database.is_muted(chat_id, user_id):
+        bot.reply_to(message, "🔇 You are muted! Wait until your mute expires.")
+        return
+
+    user = database.get_user(user_id, username)
+    last_spin = user.get("last_spin", 0)
+    if time.time() - last_spin < 86400:
+        remaining = int((last_spin + 86400 - time.time()) / 60)
+        bot.reply_to(message, f"⏳ You already spun today! Come back in {remaining} minutes.")
+        return
+
+    import random
+    slots = config.WHEEL_SLOTS
+    total_weight = sum(slot["weight"] for slot in slots)
+    roll = random.randint(1, total_weight)
+    cumulative = 0
+    result = None
+    for slot in slots:
+        cumulative += slot["weight"]
+        if roll <= cumulative:
+            result = slot
+            break
+    if not result:
+        result = slots[0]
+
+    user["last_spin"] = time.time()
+    response = "🎰 *WHEEL OF FORTUNE*\n\n"
+
+    if result.get("points"):
+        points = result["points"]
+        if points > 0:
+            user["points"] += points
+            user["alltime_points"] += points
+            month_key = database._now_month_key()
+            year_key = database._now_year_key()
+            user["monthly_points"][month_key] = user["monthly_points"].get(month_key, 0) + points
+            user["yearly_points"][year_key] = user["yearly_points"].get(year_key, 0) + points
+            database.save_user(bot, user_id, user)
+            response += f"🎉 You won *{points} points*!"
+        elif points < 0:
+            user["points"] = max(0, user["points"] + points)  # points is negative
+            database.save_user(bot, user_id, user)
+            response += f"💸 You lost *{abs(points)} points*! 😱"
+        else:
+            response += f"😐 Nothing! Try again tomorrow."
+    elif result.get("hint_token"):
+        tokens = result["hint_token"]
+        user["hint_tokens"] = user.get("hint_tokens", 0) + tokens
+        database.save_user(bot, user_id, user)
+        response += f"💡 You won *{tokens} hint token(s)*!"
+    elif result.get("double_xp"):
+        duration = result["double_xp"]
+        user["double_xp_until"] = time.time() + duration
+        database.save_user(bot, user_id, user)
+        response += f"⚡ You won *Double XP for 1 hour*!"
+    elif result.get("bankrupt"):
+        user["points"] = max(0, user["points"] - 10)
+        database.save_user(bot, user_id, user)
+        response += f"💸 *BANKRUPT!* You lost 10 points. 😱"
+    else:
+        response += f"🎁 You won *{result['name']}*!"
+
+    bot.reply_to(message, response, parse_mode="Markdown")
+
+# ---------------------------------------------------------------------------
 # CALLBACK HANDLER
 # ---------------------------------------------------------------------------
 
@@ -883,7 +975,6 @@ def handle_all_callbacks(call):
     user_id = call.from_user.id
 
     try:
-        # ── Character category picker ─────────────────────────────────────
         if data.startswith("charcat_"):
             cat = data.replace("charcat_", "")
             bot.answer_callback_query(call.id)
@@ -894,7 +985,6 @@ def handle_all_callbacks(call):
             games.start_character_game(bot, chat_id, category=cat, user_id=user_id)
             return
 
-        # ── Year category picker ──────────────────────────────────────────
         if data.startswith("yearcat_"):
             cat = data.replace("yearcat_", "")
             bot.answer_callback_query(call.id)
@@ -905,7 +995,6 @@ def handle_all_callbacks(call):
             games.start_year_game(bot, chat_id, category=cat, user_id=user_id)
             return
 
-        # ── Trivia category picker ────────────────────────────────────────
         if data.startswith("triviacat_"):
             cat = data.replace("triviacat_", "")
             bot.answer_callback_query(call.id)
@@ -916,19 +1005,10 @@ def handle_all_callbacks(call):
             games.start_trivia_game(bot, chat_id, category=cat, user_id=user_id)
             return
 
-        # ── Legacy startcat_ support ──────────────────────────────────────
-        if data.startswith("startcat_"):
-            cat = data.replace("startcat_", "")
-            bot.answer_callback_query(call.id)
-            games.start_trivia_game(bot, chat_id, category=cat)
-            return
-
-        # ── Game callbacks ──────────────────────────────────────────────────
         if any(data.startswith(p) for p in ["trivia_", "year_ans_", "vs_", "vsbet_", "vsans_", "daily_", "hint_", "stopgame_", "nextgame_"]):
             games.handle_game_callback(bot, call)
             return
 
-        # ── Admin force start / cancel ────────────────────────────────────
         if data == "admin_force_start" and is_admin(user_id):
             pending = games.pending_admin_actions.pop(chat_id, None)
             if pending:
@@ -962,7 +1042,6 @@ def handle_all_callbacks(call):
                 pass
             return
 
-        # ── Leaderboard pagination ──────────────────────────────────────
         if data.startswith("lb_"):
             if data == "lb_nop":
                 bot.answer_callback_query(call.id)
@@ -974,7 +1053,7 @@ def handle_all_callbacks(call):
             else:
                 mode = parts[1] if len(parts) > 1 else "monthly"
                 page = 1
-            all_entries = database.get_leaderboard(chat_id, mode=mode, top_n=100)
+            all_entries = database.get_leaderboard(mode=mode, top_n=100)
             total_pages = (len(all_entries) + 9) // 10
             if page < 1:
                 page = 1
@@ -996,7 +1075,6 @@ def handle_all_callbacks(call):
             bot.answer_callback_query(call.id)
             return
 
-        # ── Shop ─────────────────────────────────────────────────────────
         if data.startswith("shop_"):
             item_id  = data.replace("shop_", "")
             username = call.from_user.username or call.from_user.first_name
@@ -1004,7 +1082,6 @@ def handle_all_callbacks(call):
             bot.answer_callback_query(call.id, msg, show_alert=True)
             return
 
-        # ── Admin panel ───────────────────────────────────────────────────
         if data.startswith("admin_") and is_admin(user_id):
             action = data.replace("admin_", "")
             if action == "startchar":
@@ -1041,11 +1118,23 @@ def handle_all_callbacks(call):
             elif action == "broadcast":
                 bot.answer_callback_query(call.id)
                 bot.send_message(chat_id, "📢 Use `/broadcast YYYY-MM-DD HH:MM Your message here`", parse_mode="Markdown")
+            elif action == "checkimages":
+                bot.answer_callback_query(call.id)
+                bot.send_message(chat_id, "🔍 Checking for missing images...")
+                notify_missing_images()
+                bot.send_message(chat_id, "✅ Check complete. Admin has been notified.")
+            elif action == "crewbanner":
+                bot.answer_callback_query(call.id)
+                bot.send_message(chat_id, "👥 Generating crew banner...")
+                img = graphics.build_crew_banner(chat_id, bot)
+                if img:
+                    bot.send_photo(chat_id, img, caption="👥 *CREW BANNER*", parse_mode="Markdown")
+                else:
+                    bot.send_message(chat_id, "❌ No members found.")
             elif action == "back":
                 bot.answer_callback_query(call.id)
             return
 
-        # ── Scheduler settings ────────────────────────────────────────────
         if data.startswith("sched_") and is_admin(user_id):
             sched  = load_scheduler()
             action = data.replace("sched_", "")
@@ -1069,7 +1158,6 @@ def handle_all_callbacks(call):
             show_schedule_panel(chat_id)
             return
 
-        # ── Tag all confirm/cancel ────────────────────────────────────────
         if data == "tagall_confirm" and is_admin(user_id):
             sched    = load_scheduler()
             msg      = sched.get("tagall_pending_msg", "")
@@ -1090,7 +1178,6 @@ def handle_all_callbacks(call):
                 pass
             return
 
-        # ── Quote pagination ──────────────────────────────────────────────
         if data.startswith("qpage_") and is_admin(user_id):
             page = int(data.replace("qpage_", ""))
             text, markup = show_quotes_page(chat_id, page)
@@ -1099,10 +1186,15 @@ def handle_all_callbacks(call):
             bot.answer_callback_query(call.id)
             return
 
-        # ── Help menu ──────────────────────────────────────────────────────
         if data.startswith("help_"):
             category = data.replace("help_", "")
-            text = _get_help_text(category)
+            # Check if already on same content – avoid "message not modified"
+            current_text = call.message.text
+            new_text = _get_help_text(category)
+            if current_text == new_text:
+                bot.answer_callback_query(call.id, "Already on this menu.")
+                return
+            text = new_text
             markup = telebot.types.InlineKeyboardMarkup()
             markup.add(telebot.types.InlineKeyboardButton("🔙 Back", callback_data="help_main"))
             bot.edit_message_text(text, chat_id, call.message.message_id,
@@ -1112,14 +1204,22 @@ def handle_all_callbacks(call):
 
         if data == "help_main":
             text = "📖 *ZA SORA GAME CLUB — HELP*\n\nChoose a category below:"
+            current_text = call.message.text
+            if current_text == text:
+                bot.answer_callback_query(call.id, "Already on main menu.")
+                return
             markup = _build_help_menu()
             bot.edit_message_text(text, chat_id, call.message.message_id,
                                   reply_markup=markup, parse_mode="Markdown")
             bot.answer_callback_query(call.id)
             return
 
-        # ── Matchday menu ─────────────────────────────────────────────────
         if data == "fix_back":
+            # Check if already on main fixtures menu
+            current_text = call.message.text
+            if current_text == "📋 *FIXTURES*\n\nChoose how you want to browse:":
+                bot.answer_callback_query(call.id, "Already on main menu.")
+                return
             show_fixtures_inline(chat_id, call.message.message_id)
             bot.answer_callback_query(call.id)
             return
@@ -1192,7 +1292,6 @@ def handle_all_callbacks(call):
             bot.answer_callback_query(call.id)
             return
 
-        # ── Fixtures navigation ───────────────────────────────────────────
         if data == "fix_pl_menu":
             rows = database.fetch_csv_cached(bot, config.FIXTURES_CSV_URL)
             if not rows or len(rows) <= 1:
@@ -1308,28 +1407,23 @@ def background_scheduler():
 
             sched = load_scheduler()
 
-            # Morning message at 8:00 AM
             if hour == config.MORNING_MSG_HOUR and minute == config.MORNING_MSG_MIN:
                 print("🌅 Sending morning message...")
                 send_morning_message(bot)
                 time.sleep(61)
 
-            # Weekly recap every Monday at 9:00 AM
             if now.weekday() == 0 and hour == 9 and minute == 0:
                 send_weekly_recap(bot)
                 time.sleep(61)
 
-            # Daily challenge at 2:00 PM
             if hour == config.DAILY_CHALLENGE_HOUR and minute == config.DAILY_CHALLENGE_MIN:
                 games.post_daily_challenge(bot)
                 time.sleep(61)
 
-            # Sunday cache rebuild at midnight
             if now.weekday() == 6 and hour == 0 and minute == 0:
                 graphics.clear_and_rebuild_disk_cache(bot)
                 time.sleep(61)
 
-            # Sunday standings broadcast at noon
             if now.weekday() == 6 and hour == 12 and minute == 0:
                 groups  = database.get_all_groups()
                 img_data = graphics.generate_table_image(bot)
@@ -1343,24 +1437,24 @@ def background_scheduler():
                     if hasattr(img_data, 'close'): img_data.close()
                 time.sleep(61)
 
-            # Monthly reset check (run daily at 00:01)
             if hour == 0 and minute == 1:
                 database.check_and_run_monthly_reset(bot)
                 database.check_and_run_yearly_reset(bot)
                 time.sleep(61)
 
-            # Check for pending broadcasts every minute
+            # Broadcast scheduler
             pending = database.get_pending_broadcasts()
             for broadcast in pending:
                 try:
                     bot.send_message(broadcast["chat_id"], broadcast["message"], parse_mode="Markdown")
-                    # Mark as sent
-                    index = pending.index(broadcast)
-                    database.mark_broadcast_sent(bot, index)
+                    all_broadcasts = database.load_broadcasts()
+                    for i, b in enumerate(all_broadcasts):
+                        if b.get("sent") == False and b.get("send_time") == broadcast["send_time"]:
+                            database.mark_broadcast_sent(bot, i)
+                            break
                 except Exception as e:
                     print(f"Broadcast failed: {e}")
 
-            # Auto game scheduler
             if sched.get("enabled"):
                 window_start = sched.get("window_start", config.SCHEDULER_WINDOW_START)
                 window_end   = sched.get("window_end",   config.SCHEDULER_WINDOW_END)
@@ -1449,14 +1543,14 @@ def notify_missing_images():
         try:
             bot.send_message(config.ADMIN_ID,
                 "✅ All local images found! No missing files.",
-                parse_mode="Markdown")
+                parse_mode=None)
         except Exception:
             pass
         return
 
     msg_lines = []
     msg_lines.append(f"📁 Missing Local Images — {total} total")
-    msg_lines.append("(Bot will fall back to URLs for these)")
+    msg_lines.append("(Bot will fall back to GitHub for these)")
     msg_lines.append("")
 
     if missing_chars:
@@ -1500,6 +1594,7 @@ def notify_missing_images():
 
 def handle_image_upload(message):
     import re
+    import requests
 
     if message.chat.id != config.ADMIN_ID:
         return
@@ -1543,8 +1638,7 @@ def handle_image_upload(message):
     try:
         file_info = bot.get_file(file_id)
         dl_url    = f"https://api.telegram.org/file/bot{config.API_TOKEN}/{file_info.file_path}"
-        import requests
-        response  = requests.get(dl_url, timeout=15)
+        response  = requests.get(dl_url, timeout=15, proxies={})
         response.raise_for_status()
         with open(filepath, 'wb') as f:
             f.write(response.content)
@@ -1565,22 +1659,21 @@ def handle_image_upload(message):
 
 def register_commands():
     public_commands = [
-        telebot.types.BotCommand("start",       "👋 Welcome message & how to play"),
+        telebot.types.BotCommand("start",       "👋 Welcome message"),
         telebot.types.BotCommand("help",         "📖 Full command list"),
         telebot.types.BotCommand("game",         "👤 Guess the Character"),
         telebot.types.BotCommand("year",         "🎬 Guess the Release Year"),
         telebot.types.BotCommand("picture",      "🖼️ Scrambled Image Guessing"),
-        telebot.types.BotCommand("trivia",       "❓ Multiple choice trivia"),
+        telebot.types.BotCommand("trivia",       "❓ Trivia (choose category)"),
         telebot.types.BotCommand("spin",         "🎰 Wheel of Fortune"),
         telebot.types.BotCommand("versus",       "⚔️ Challenge another player"),
-        telebot.types.BotCommand("forfeit",      "🏳️ Forfeit an active versus match"),
-        telebot.types.BotCommand("hint",         "💡 Get a hint (costs points)"),
-        telebot.types.BotCommand("stop",         "🛑 Stop the current game"),
-        telebot.types.BotCommand("leaderboard",  "🏆 View the rankings"),
-        telebot.types.BotCommand("mystats",      "📊 View your personal stats"),
-        telebot.types.BotCommand("profile",      "👤 View your profile card"),
+        telebot.types.BotCommand("leaderboard",  "🏆 View global rankings"),
+        telebot.types.BotCommand("mystats",      "📊 Your stats (text)"),
+        telebot.types.BotCommand("myprofile",    "👤 Your profile card (image)"),
+        telebot.types.BotCommand("viewstats",    "📊 Stats of mentioned user (text)"),
+        telebot.types.BotCommand("viewprofile",  "👤 Profile card of mentioned user (image)"),
         telebot.types.BotCommand("shop",         "🛒 Spend your points"),
-        telebot.types.BotCommand("categories",   "🗂️ View trivia categories"),
+        telebot.types.BotCommand("powerups",     "⚡ View your power-ups"),
         telebot.types.BotCommand("table",        "📋 League standings"),
         telebot.types.BotCommand("fixtures",     "📅 Match fixtures"),
     ]
@@ -1593,12 +1686,16 @@ def register_commands():
         telebot.types.BotCommand("unmute",       "🔊 Unmute a user"),
         telebot.types.BotCommand("broadcast",    "📢 Schedule a broadcast"),
         telebot.types.BotCommand("uploadtrivia", "📤 Upload trivia questions"),
+        telebot.types.BotCommand("checkimages",  "🔍 Check for missing images"),
+        telebot.types.BotCommand("testbroadcast","🧪 Test broadcast system"),
+        telebot.types.BotCommand("crewbanner",   "👥 Generate crew banner"),
+        telebot.types.BotCommand("rebuildcache", "🔄 Rebuild image cache"),
+        telebot.types.BotCommand("testmorning",  "🧪 Test morning message"),
         telebot.types.BotCommand("addquote",     "➕ Add a quote (DM only)"),
         telebot.types.BotCommand("listquotes",   "📝 List all quotes (DM only)"),
         telebot.types.BotCommand("editquote",    "✏️ Edit a quote (DM only)"),
         telebot.types.BotCommand("deletequote",  "🗑️ Delete a quote (DM only)"),
         telebot.types.BotCommand("previewquote", "👁️ Preview a quote (DM only)"),
-        telebot.types.BotCommand("testmorning",  "🧪 Test morning message (admin)"),
     ]
 
     try:
@@ -1622,40 +1719,39 @@ def show_help(message):
     bot.send_message(chat_id, text, reply_markup=markup, parse_mode="Markdown")
 
 # ---------------------------------------------------------------------------
-# MY STATS COMMAND
+# MY STATS COMMAND (Text version)
 # ---------------------------------------------------------------------------
 
-def show_my_stats(message):
-    chat_id  = message.chat.id
-    user_id  = message.from_user.id
-    username = message.from_user.username or message.from_user.first_name
+def show_my_stats(message, target_id=None, target_name=None):
+    chat_id = message.chat.id
+    if target_id is None:
+        target_id = message.from_user.id
+        target_name = message.from_user.username or message.from_user.first_name
 
-    data     = database.load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    user_str = str(user_id)
-
-    if chat_str not in data or user_str not in data[chat_str]:
+    data = database.load_json(config.USER_DATA_FILE, {})
+    user_str = str(target_id)
+    if user_str not in data:
         bot.reply_to(message, "❌ No stats found yet. Play a game first!")
         return
 
-    u         = data[chat_str][user_str]
+    u = data[user_str]
     month_key = database._now_month_key()
-    year_key  = database._now_year_key()
+    year_key = database._now_year_key()
 
-    monthly  = u.get("monthly_points", {}).get(month_key, 0)
-    yearly   = u.get("yearly_points",  {}).get(year_key,  0)
-    alltime  = u.get("alltime_points", 0)
-    streak   = u.get("streak",       0)
-    best     = u.get("best_streak",  0)
-    played   = u.get("games_played", 0)
-    correct  = u.get("correct",      0)
-    title    = database._get_active_title(u) or "None"
-    hints    = u.get("hint_tokens",  0)
-    badges   = u.get("badges", [])
+    monthly = u.get("monthly_points", {}).get(month_key, 0)
+    yearly = u.get("yearly_points", {}).get(year_key, 0)
+    alltime = u.get("alltime_points", 0)
+    streak = u.get("streak", 0)
+    best = u.get("best_streak", 0)
+    played = u.get("games_played", 0)
+    correct = u.get("correct", 0)
+    title = database._get_active_title(u) or "None"
+    hints = u.get("hint_tokens", 0)
+    badges = u.get("badges", [])
     accuracy = f"{int((correct / played) * 100)}%" if played > 0 else "N/A"
 
-    lb   = database.get_leaderboard(chat_id, mode="monthly", top_n=100)
-    rank = next((r for r, name, *_ in lb if name == username), "?")
+    lb = database.get_leaderboard(mode="monthly", top_n=100)
+    rank = next((r for r, name, *_ in lb if name == target_name), "?")
 
     double_xp = u.get("double_xp_until")
     xp_status = ""
@@ -1668,7 +1764,7 @@ def show_my_stats(message):
     powerup_str = ", ".join([f"{config.POWERUPS.get(k, {}).get('emoji', k)} {k.replace('_',' ').title()} x{v}" for k, v in powerups.items() if v > 0]) or "None"
 
     text = (
-        f"📊 *{username}'s Stats*\n\n"
+        f"📊 *{target_name}'s Stats*\n\n"
         f"🏅 *Title:* {title}\n"
         f"🏆 *Monthly rank:* #{rank}\n\n"
         f"💰 *Points*\n"
@@ -1687,24 +1783,16 @@ def show_my_stats(message):
         f"⚡ *Power-ups:* {powerup_str}\n"
         f"{xp_status}"
     )
-    bot.reply_to(message, text, parse_mode="Markdown")
+    if target_id == message.from_user.id:
+        bot.reply_to(message, text, parse_mode="Markdown")
+    else:
+        bot.send_message(chat_id, text, parse_mode="Markdown")
 
 # ---------------------------------------------------------------------------
-# CATEGORIES COMMAND
+# CATEGORIES COMMAND (Removed – merged into /trivia)
 # ---------------------------------------------------------------------------
 
-def show_categories(message):
-    markup = telebot.types.InlineKeyboardMarkup(row_width=2)
-    markup.add(*[
-        telebot.types.InlineKeyboardButton(f"{cat}", callback_data=f"startcat_{cat}")
-        for cat in config.TRIVIA_CATEGORIES
-    ])
-    bot.send_message(
-        message.chat.id,
-        "🗂️ *TRIVIA CATEGORIES*\n\nTap a category to start a trivia round:",
-        reply_markup=markup,
-        parse_mode="Markdown"
-    )
+# (Function removed – /trivia now shows the picker directly)
 
 # ---------------------------------------------------------------------------
 # MAIN
@@ -1712,9 +1800,12 @@ def show_categories(message):
 
 if __name__ == "__main__":
     print("🚀 Za Sora Bot starting...")
+    # Run migration first
+    database.migrate_group_to_global(bot)
     register_commands()
     games.precache_assets(bot)
-    graphics.clear_and_rebuild_disk_cache(bot)
+    # Rebuild cache in background (doesn't block startup)
+    threading.Thread(target=graphics.clear_and_rebuild_disk_cache, args=(bot,), daemon=True).start()
     database.check_and_run_monthly_reset(bot)
     database.cleanup_expired_mutes(bot)
     threading.Thread(target=background_scheduler, daemon=True).start()
