@@ -94,11 +94,9 @@ def _get_help_text(category):
         ),
         "rankings": (
             "🏆 *RANKINGS & STATS*\n\n"
-            "/leaderboard — View global rankings\n"
-            "/mystats — Text version of your stats\n"
-            "/myprofile — Image profile card (yourself)\n"
-            "/viewstats @user — Text stats of mentioned user\n"
-            "/viewprofile @user — Image profile card of mentioned user"
+            "/leaderboard — View rankings\n"
+            "/mystats — Your stats (text)\n"
+            "/viewstats @user — Stats of mentioned user"
         ),
         "shop": (
             "🛒 *SHOP & POWER-UPS*\n\n"
@@ -112,8 +110,7 @@ def _get_help_text(category):
         "info": (
             "📋 *INFO & TOOLS*\n\n"
             "/table — League standings (image)\n"
-            "/fixtures — Match fixtures (image)\n"
-            "/crewbanner — Crew collage of all members"
+            "/fixtures — Match fixtures (image)"
         ),
         "admin": (
             "⚙️ *ADMIN COMMANDS*\n\n"
@@ -126,7 +123,6 @@ def _get_help_text(category):
             "/uploadtrivia — Upload trivia questions (file)\n"
             "/checkimages — Check for missing images\n"
             "/testbroadcast — Test broadcast system\n"
-            "/crewbanner — Generate crew banner\n"
             "/rebuildcache — Rebuild image cache\n"
             "/testmorning — Test morning message"
         ),
@@ -232,7 +228,7 @@ def show_leaderboard(message):
     bot.send_chat_action(message.chat.id, 'upload_photo')
     mode = "monthly"
     page = 1
-    all_entries = database.get_leaderboard(mode=mode, top_n=100)
+    all_entries = database.get_leaderboard(message.chat.id, mode=mode, top_n=100)
     total_pages = (len(all_entries) + 9) // 10
     img = graphics.build_leaderboard_image(message.chat.id, mode, page)
     if img:
@@ -369,7 +365,6 @@ def show_admin_panel(message):
         telebot.types.InlineKeyboardButton("🔇 Mute User",             callback_data="admin_mute"),
         telebot.types.InlineKeyboardButton("📢 Broadcast",             callback_data="admin_broadcast"),
         telebot.types.InlineKeyboardButton("🔍 Check Images",          callback_data="admin_checkimages"),
-        telebot.types.InlineKeyboardButton("👥 Crew Banner",           callback_data="admin_crewbanner"),
     )
     sched = load_scheduler()
     status_icon = "✅" if sched.get("enabled") else "❌"
@@ -418,8 +413,12 @@ def show_schedule_panel(chat_id):
     )
 
 def show_stats(chat_id):
-    data = database.load_json(config.USER_DATA_FILE, {})
-    users = data
+    data = database.load_json(config.GROUP_DATA_FILE, {})
+    chat_str = str(chat_id)
+    if chat_str not in data:
+        bot.send_message(chat_id, "📊 No stats yet.")
+        return
+    users = data[chat_str]
     total_games  = sum(u.get("games_played", 0) for u in users.values())
     total_pts    = sum(u.get("alltime_points", 0) for u in users.values())
     most_active  = max(users.values(), key=lambda u: u.get("games_played", 0), default=None)
@@ -443,20 +442,20 @@ def show_stats(chat_id):
 
 def send_weekly_recap(bot):
     groups = database.get_all_groups()
-    lb = database.get_leaderboard(mode="monthly", top_n=3)
-    top3 = ""
-    if lb:
-        medals = ["🥇", "🥈", "🥉"]
-        for rank, username, points, streak, title in lb:
-            top3 += f"{medals[rank-1]} {username} — {points} pts\n"
-    else:
-        top3 = "No scores yet this month!\n"
-    msg = (
-        f"📊 *WEEKLY RECAP*\n\n"
-        f"🏆 *Monthly Top 3:*\n{top3}\n"
-        f"Keep up the great work, family! 🙏🔥"
-    )
     for group_id in groups:
+        lb = database.get_leaderboard(group_id, mode="monthly", top_n=3)
+        top3 = ""
+        if lb:
+            medals = ["🥇", "🥈", "🥉"]
+            for rank, username, points, streak, title in lb:
+                top3 += f"{medals[rank-1]} {username} — {points} pts\n"
+        else:
+            top3 = "No scores yet this month!\n"
+        msg = (
+            f"📊 *WEEKLY RECAP*\n\n"
+            f"🏆 *Monthly Top 3:*\n{top3}\n"
+            f"Keep up the great work, family! 🙏🔥"
+        )
         try:
             bot.send_message(group_id, msg, parse_mode="Markdown")
         except Exception as e:
@@ -476,7 +475,7 @@ def send_morning_message(bot):
     print(f"📊 Found {len(groups)} groups")
 
     for group_id in groups:
-        lb = database.get_leaderboard(mode="monthly", top_n=3)
+        lb = database.get_leaderboard(group_id, mode="monthly", top_n=3)
         top3 = ""
         if lb:
             medals = ["🥇", "🥈", "🥉"]
@@ -579,13 +578,16 @@ def welcome_new_member(message):
         )
         # Send welcome GIF if available
         try:
-            if os.path.exists("images/welcome.gif"):
-                with open("images/welcome.gif", "rb") as f:
-                    bot.send_animation(message.chat.id, f, caption=welcome, parse_mode="Markdown")
+            # Try GitHub first
+            import requests
+            gif_url = f"{config.GITHUB_RAW_BASE_URL}welcome.gif"
+            response = requests.get(gif_url, timeout=5)
+            if response.status_code == 200:
+                bot.send_animation(message.chat.id, gif_url, caption=welcome, parse_mode="Markdown")
             else:
                 bot.send_message(message.chat.id, welcome, parse_mode="Markdown")
         except Exception as e:
-            print(f"Welcome message failed: {e}")
+            print(f"Welcome GIF failed: {e}")
             bot.send_message(message.chat.id, welcome, parse_mode="Markdown")
 
 @bot.message_handler(func=lambda message: True)
@@ -611,9 +613,11 @@ def handle_all_messages(message):
 
     if cmd == '/start':
         try:
-            if os.path.exists("images/welcome.gif"):
-                with open("images/welcome.gif", "rb") as f:
-                    bot.send_animation(chat_id, f, caption=config.WELCOME_MSG, parse_mode="Markdown")
+            import requests
+            gif_url = f"{config.GITHUB_RAW_BASE_URL}welcome.gif"
+            response = requests.get(gif_url, timeout=5)
+            if response.status_code == 200:
+                bot.send_animation(chat_id, gif_url, caption=config.WELCOME_MSG, parse_mode="Markdown")
             else:
                 bot.reply_to(message, config.WELCOME_MSG, parse_mode="Markdown")
         except Exception as e:
@@ -625,13 +629,6 @@ def handle_all_messages(message):
 
     elif cmd == '/mystats':
         show_my_stats(message)
-
-    elif cmd == '/myprofile':
-        img = graphics.build_profile_card(chat_id, user_id, username, bot=bot)
-        if img:
-            bot.send_photo(chat_id, img, caption="👤 *Your Profile*", parse_mode="Markdown")
-        else:
-            bot.reply_to(message, "❌ No data found.")
 
     elif cmd == '/viewstats':
         if args and args[0].startswith('@'):
@@ -645,23 +642,6 @@ def handle_all_messages(message):
             show_my_stats(message, target_id, target_name)
         else:
             bot.reply_to(message, "Usage: /viewstats @username")
-
-    elif cmd == '/viewprofile':
-        if args and args[0].startswith('@'):
-            target_mention = args[0].lstrip('@')
-            members = database.get_all_members(chat_id)
-            target = next((m for m in members if m[1].lower() == target_mention.lower()), None)
-            if not target:
-                bot.reply_to(message, "❌ User not found.")
-                return
-            target_id, target_name = target
-            img = graphics.build_profile_card(chat_id, target_id, target_name, bot=bot)
-            if img:
-                bot.send_photo(chat_id, img, caption=f"👤 *Profile — {target_name}*", parse_mode="Markdown")
-            else:
-                bot.reply_to(message, "❌ No data found for this user.")
-        else:
-            bot.reply_to(message, "Usage: /viewprofile @username")
 
     elif cmd == '/table':
         show_league_table(message)
@@ -696,12 +676,13 @@ def handle_all_messages(message):
         show_shop(message)
 
     elif cmd == '/powerups':
-        data = database.load_json(config.USER_DATA_FILE, {})
+        data = database.load_json(config.GROUP_DATA_FILE, {})
+        chat_str = str(chat_id)
         user_str = str(user_id)
-        if user_str not in data:
+        if chat_str not in data or user_str not in data[chat_str]:
             bot.reply_to(message, "💡 You don't have any power-ups.\n\nPurchase them from the shop!")
             return
-        u = data[user_str]
+        u = data[chat_str][user_str]
         powerups = u.get("powerups", {})
         if not powerups:
             bot.reply_to(message, "💡 You don't have any power-ups.\n\nPurchase them from the shop!")
@@ -757,20 +738,14 @@ def handle_all_messages(message):
         msg = "🧪 *Test Broadcast*\n\nThis is a test of the broadcast system. If you received this, it's working! 🎉"
         bot.reply_to(message, "📤 Sending test broadcast...")
         groups = database.get_all_groups()
+        count = 0
         for gid in groups:
             try:
                 bot.send_message(gid, msg, parse_mode="Markdown")
+                count += 1
             except Exception as e:
                 print(f"Test broadcast failed for {gid}: {e}")
-        bot.reply_to(message, "✅ Test broadcast sent to all groups.")
-
-    elif cmd == '/crewbanner' and is_admin(user_id):
-        bot.reply_to(message, "👥 Generating crew banner...")
-        img = graphics.build_crew_banner(chat_id, bot)
-        if img:
-            bot.send_photo(chat_id, img, caption="👥 *CREW BANNER*", parse_mode="Markdown")
-        else:
-            bot.reply_to(message, "❌ No members found to generate banner.")
+        bot.reply_to(message, f"✅ Test broadcast sent to {count} groups.")
 
     elif cmd == '/rebuildcache' and is_admin(user_id):
         bot.reply_to(message, "🔄 Rebuilding image cache...")
@@ -904,8 +879,11 @@ def handle_spin(message):
         bot.reply_to(message, "🔇 You are muted! Wait until your mute expires.")
         return
 
-    user = database.get_user(user_id, username)
-    last_spin = user.get("last_spin", 0)
+    data = database.load_json(config.GROUP_DATA_FILE, {})
+    chat_str = str(chat_id)
+    user_str = str(user_id)
+    u = database.get_user(data, chat_str, user_str, username)
+    last_spin = u.get("last_spin", 0)
     if time.time() - last_spin < 86400:
         remaining = int((last_spin + 86400 - time.time()) / 60)
         bot.reply_to(message, f"⏳ You already spun today! Come back in {remaining} minutes.")
@@ -925,39 +903,39 @@ def handle_spin(message):
     if not result:
         result = slots[0]
 
-    user["last_spin"] = time.time()
+    u["last_spin"] = time.time()
     response = "🎰 *WHEEL OF FORTUNE*\n\n"
 
     if result.get("points"):
         points = result["points"]
         if points > 0:
-            user["points"] += points
-            user["alltime_points"] += points
+            u["points"] += points
+            u["alltime_points"] += points
             month_key = database._now_month_key()
             year_key = database._now_year_key()
-            user["monthly_points"][month_key] = user["monthly_points"].get(month_key, 0) + points
-            user["yearly_points"][year_key] = user["yearly_points"].get(year_key, 0) + points
-            database.save_user(bot, user_id, user)
+            u["monthly_points"][month_key] = u["monthly_points"].get(month_key, 0) + points
+            u["yearly_points"][year_key] = u["yearly_points"].get(year_key, 0) + points
+            database.save_json(bot, config.GROUP_DATA_FILE, data)
             response += f"🎉 You won *{points} points*!"
         elif points < 0:
-            user["points"] = max(0, user["points"] + points)  # points is negative
-            database.save_user(bot, user_id, user)
+            u["points"] = max(0, u["points"] + points)
+            database.save_json(bot, config.GROUP_DATA_FILE, data)
             response += f"💸 You lost *{abs(points)} points*! 😱"
         else:
             response += f"😐 Nothing! Try again tomorrow."
     elif result.get("hint_token"):
         tokens = result["hint_token"]
-        user["hint_tokens"] = user.get("hint_tokens", 0) + tokens
-        database.save_user(bot, user_id, user)
+        u["hint_tokens"] = u.get("hint_tokens", 0) + tokens
+        database.save_json(bot, config.GROUP_DATA_FILE, data)
         response += f"💡 You won *{tokens} hint token(s)*!"
     elif result.get("double_xp"):
         duration = result["double_xp"]
-        user["double_xp_until"] = time.time() + duration
-        database.save_user(bot, user_id, user)
+        u["double_xp_until"] = time.time() + duration
+        database.save_json(bot, config.GROUP_DATA_FILE, data)
         response += f"⚡ You won *Double XP for 1 hour*!"
     elif result.get("bankrupt"):
-        user["points"] = max(0, user["points"] - 10)
-        database.save_user(bot, user_id, user)
+        u["points"] = max(0, u["points"] - 10)
+        database.save_json(bot, config.GROUP_DATA_FILE, data)
         response += f"💸 *BANKRUPT!* You lost 10 points. 😱"
     else:
         response += f"🎁 You won *{result['name']}*!"
@@ -1053,7 +1031,7 @@ def handle_all_callbacks(call):
             else:
                 mode = parts[1] if len(parts) > 1 else "monthly"
                 page = 1
-            all_entries = database.get_leaderboard(mode=mode, top_n=100)
+            all_entries = database.get_leaderboard(chat_id, mode=mode, top_n=100)
             total_pages = (len(all_entries) + 9) // 10
             if page < 1:
                 page = 1
@@ -1123,14 +1101,6 @@ def handle_all_callbacks(call):
                 bot.send_message(chat_id, "🔍 Checking for missing images...")
                 notify_missing_images()
                 bot.send_message(chat_id, "✅ Check complete. Admin has been notified.")
-            elif action == "crewbanner":
-                bot.answer_callback_query(call.id)
-                bot.send_message(chat_id, "👥 Generating crew banner...")
-                img = graphics.build_crew_banner(chat_id, bot)
-                if img:
-                    bot.send_photo(chat_id, img, caption="👥 *CREW BANNER*", parse_mode="Markdown")
-                else:
-                    bot.send_message(chat_id, "❌ No members found.")
             elif action == "back":
                 bot.answer_callback_query(call.id)
             return
@@ -1188,7 +1158,6 @@ def handle_all_callbacks(call):
 
         if data.startswith("help_"):
             category = data.replace("help_", "")
-            # Check if already on same content – avoid "message not modified"
             current_text = call.message.text
             new_text = _get_help_text(category)
             if current_text == new_text:
@@ -1215,7 +1184,6 @@ def handle_all_callbacks(call):
             return
 
         if data == "fix_back":
-            # Check if already on main fixtures menu
             current_text = call.message.text
             if current_text == "📋 *FIXTURES*\n\nChoose how you want to browse:":
                 bot.answer_callback_query(call.id, "Already on main menu.")
@@ -1498,11 +1466,22 @@ def notify_missing_images():
     def to_filename(name):
         return re.sub(r'[^a-zA-Z0-9._-]', '_', name).strip('_')
 
-    def find_local(name, folder):
-        for ext in ['.jpg', '.jpeg', '.png', '.webp']:
-            if os.path.exists(os.path.join(folder, to_filename(name) + ext)):
-                return True
-        return False
+    def find_github(name, folder):
+        # Check if the image exists on GitHub
+        safe_name = to_filename(name)
+        if folder == config.LOCAL_CHAR_IMAGES_DIR:
+            remote_folder = "characters"
+        elif folder == config.LOCAL_MEDIA_IMAGES_DIR:
+            remote_folder = "media"
+        else:
+            remote_folder = folder
+        import requests
+        url = f"{config.GITHUB_RAW_BASE_URL}{remote_folder}/{safe_name}.jpg"
+        try:
+            r = requests.head(url, timeout=5)
+            return r.status_code == 200
+        except Exception:
+            return False
 
     char_folder  = config.LOCAL_CHAR_IMAGES_DIR
     media_folder = config.LOCAL_MEDIA_IMAGES_DIR
@@ -1526,14 +1505,14 @@ def notify_missing_images():
     for cat, path in char_dbs.items():
         data = database.load_json(path, []) if os.path.exists(path) else []
         if isinstance(data, list):
-            missing = [c['name'] for c in data if not find_local(c.get('name', ''), char_folder)]
+            missing = [c['name'] for c in data if not find_github(c.get('name', ''), char_folder)]
             if missing:
                 missing_chars[cat] = missing
 
     for cat, path in media_dbs.items():
         data = database.load_json(path, []) if os.path.exists(path) else []
         if isinstance(data, list):
-            missing = [m['title'] for m in data if not find_local(m.get('title', ''), media_folder)]
+            missing = [m['title'] for m in data if not find_github(m.get('title', ''), media_folder)]
             if missing:
                 missing_media[cat] = missing
 
@@ -1542,15 +1521,15 @@ def notify_missing_images():
     if total == 0:
         try:
             bot.send_message(config.ADMIN_ID,
-                "✅ All local images found! No missing files.",
+                "✅ All images found on GitHub! No missing files.",
                 parse_mode=None)
         except Exception:
             pass
         return
 
     msg_lines = []
-    msg_lines.append(f"📁 Missing Local Images — {total} total")
-    msg_lines.append("(Bot will fall back to GitHub for these)")
+    msg_lines.append(f"📁 Missing Images on GitHub — {total} total")
+    msg_lines.append("(Bot will fall back to original URLs for these)")
     msg_lines.append("")
 
     if missing_chars:
@@ -1617,10 +1596,10 @@ def handle_image_upload(message):
     name       = " ".join(parts[1:-1])
 
     if folder_arg in ("characters", "character", "char"):
-        folder = config.LOCAL_CHAR_IMAGES_DIR
+        folder = "characters"
         label  = "characters"
     elif folder_arg in ("media", "movie", "anime", "animation"):
-        folder = config.LOCAL_MEDIA_IMAGES_DIR
+        folder = "media"
         label  = "media"
     else:
         bot.reply_to(message,
@@ -1628,27 +1607,28 @@ def handle_image_upload(message):
             parse_mode="Markdown")
         return
 
-    os.makedirs(folder, exist_ok=True)
-
     file_id   = message.photo[-1].file_id
     safe_name = re.sub(r'[^a-zA-Z0-9._-]', '_', name).strip('_')
     filename  = f"{safe_name}.jpg"
-    filepath  = os.path.join(folder, filename)
 
     try:
         file_info = bot.get_file(file_id)
         dl_url    = f"https://api.telegram.org/file/bot{config.API_TOKEN}/{file_info.file_path}"
         response  = requests.get(dl_url, timeout=15, proxies={})
         response.raise_for_status()
-        with open(filepath, 'wb') as f:
-            f.write(response.content)
-        size_kb = len(response.content) // 1024
-        bot.reply_to(message,
-            f"✅ *Saved!*\n"
-            f"📁 `local_images/{label}/{filename}`\n"
-            f"📦 {size_kb} KB",
-            parse_mode="Markdown")
-        print(f"[IMG UPLOAD] Saved: {filepath} ({size_kb}KB)")
+        image_data = response.content
+
+        # Upload to GitHub
+        from github_uploader import upload_image_to_github
+        result = upload_image_to_github(bot, image_data, filename, folder)
+        if result:
+            bot.reply_to(message,
+                f"✅ *Saved to GitHub!*\n"
+                f"📁 `images/{folder}/{filename}`\n"
+                f"🔗 {result}",
+                parse_mode="Markdown")
+        else:
+            bot.reply_to(message, "❌ Failed to upload to GitHub. Check logs.")
     except Exception as e:
         bot.reply_to(message, f"❌ Failed to save image: {e}")
         print(f"[IMG UPLOAD] Error: {e}")
@@ -1667,11 +1647,9 @@ def register_commands():
         telebot.types.BotCommand("trivia",       "❓ Trivia (choose category)"),
         telebot.types.BotCommand("spin",         "🎰 Wheel of Fortune"),
         telebot.types.BotCommand("versus",       "⚔️ Challenge another player"),
-        telebot.types.BotCommand("leaderboard",  "🏆 View global rankings"),
+        telebot.types.BotCommand("leaderboard",  "🏆 View rankings"),
         telebot.types.BotCommand("mystats",      "📊 Your stats (text)"),
-        telebot.types.BotCommand("myprofile",    "👤 Your profile card (image)"),
-        telebot.types.BotCommand("viewstats",    "📊 Stats of mentioned user (text)"),
-        telebot.types.BotCommand("viewprofile",  "👤 Profile card of mentioned user (image)"),
+        telebot.types.BotCommand("viewstats",    "📊 Stats of mentioned user"),
         telebot.types.BotCommand("shop",         "🛒 Spend your points"),
         telebot.types.BotCommand("powerups",     "⚡ View your power-ups"),
         telebot.types.BotCommand("table",        "📋 League standings"),
@@ -1688,7 +1666,6 @@ def register_commands():
         telebot.types.BotCommand("uploadtrivia", "📤 Upload trivia questions"),
         telebot.types.BotCommand("checkimages",  "🔍 Check for missing images"),
         telebot.types.BotCommand("testbroadcast","🧪 Test broadcast system"),
-        telebot.types.BotCommand("crewbanner",   "👥 Generate crew banner"),
         telebot.types.BotCommand("rebuildcache", "🔄 Rebuild image cache"),
         telebot.types.BotCommand("testmorning",  "🧪 Test morning message"),
         telebot.types.BotCommand("addquote",     "➕ Add a quote (DM only)"),
@@ -1728,13 +1705,14 @@ def show_my_stats(message, target_id=None, target_name=None):
         target_id = message.from_user.id
         target_name = message.from_user.username or message.from_user.first_name
 
-    data = database.load_json(config.USER_DATA_FILE, {})
+    data = database.load_json(config.GROUP_DATA_FILE, {})
+    chat_str = str(chat_id)
     user_str = str(target_id)
-    if user_str not in data:
+    if chat_str not in data or user_str not in data[chat_str]:
         bot.reply_to(message, "❌ No stats found yet. Play a game first!")
         return
 
-    u = data[user_str]
+    u = data[chat_str][user_str]
     month_key = database._now_month_key()
     year_key = database._now_year_key()
 
@@ -1750,7 +1728,7 @@ def show_my_stats(message, target_id=None, target_name=None):
     badges = u.get("badges", [])
     accuracy = f"{int((correct / played) * 100)}%" if played > 0 else "N/A"
 
-    lb = database.get_leaderboard(mode="monthly", top_n=100)
+    lb = database.get_leaderboard(chat_id, mode="monthly", top_n=100)
     rank = next((r for r, name, *_ in lb if name == target_name), "?")
 
     double_xp = u.get("double_xp_until")
@@ -1789,22 +1767,13 @@ def show_my_stats(message, target_id=None, target_name=None):
         bot.send_message(chat_id, text, parse_mode="Markdown")
 
 # ---------------------------------------------------------------------------
-# CATEGORIES COMMAND (Removed – merged into /trivia)
-# ---------------------------------------------------------------------------
-
-# (Function removed – /trivia now shows the picker directly)
-
-# ---------------------------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     print("🚀 Za Sora Bot starting...")
-    # Run migration first
-    database.migrate_group_to_global(bot)
     register_commands()
     games.precache_assets(bot)
-    # Rebuild cache in background (doesn't block startup)
     threading.Thread(target=graphics.clear_and_rebuild_disk_cache, args=(bot,), daemon=True).start()
     database.check_and_run_monthly_reset(bot)
     database.cleanup_expired_mutes(bot)
