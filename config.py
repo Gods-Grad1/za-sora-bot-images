@@ -10,11 +10,12 @@ ADMIN_ID    = 8234402535
 CURRENT_TABLE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSh6Ulx9_QZOrrAFNA4l1zj3Gv16HCpLilwhudvSJu4zUeMEoQDn5MM7UFe4c2hoUVSr0JYdNOggi-_/pub?gid=0&single=true&output=csv"
 FIXTURES_CSV_URL      = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSh6Ulx9_QZOrrAFNA4l1zj3Gv16HCpLilwhudvSJu4zUeMEoQDn5MM7UFe4c2hoUVSr0JYdNOggi-_/pub?gid=745306980&single=true&output=csv"
 
-# --- GITHUB IMAGE BACKUP ---
-GITHUB_RAW_BASE_URL = "https://raw.githubusercontent.com/Gods-Grad1/za-sora-bot-images/7ba0eeb5a0759f7bb17d581db7e42af22efe471c/images/"
+# --- GITHUB IMAGE BACKUP (UPDATED) ---
+GITHUB_RAW_BASE_URL = "https://raw.githubusercontent.com/Gods-Grad1/za-sora-bot/main/images/"
 
 # --- DATABASE FILE PATHS ---
-GROUP_DATA_FILE   = "group_data.json"
+USER_DATA_FILE    = "user_data.json"       # NEW: Global user stats
+GROUP_DATA_FILE   = "group_data.json"      # Now only tracks groups
 GROUPS_FILE       = "groups_db.txt"
 STATE_FILE        = "bot_state.json"
 CHAR_DB           = "characters_db.json"
@@ -28,6 +29,7 @@ VERSUS_FILE       = "versus_state.json"
 DAILY_FILE        = "daily_challenge.json"
 MUTE_FILE         = "muted_users.json"
 BROADCAST_FILE    = "broadcasts.json"
+MIGRATION_FLAG    = "migration_done.flag"   # NEW: prevents re-migration
 
 # --- IMAGE DIRECTORIES ---
 IMAGE_CACHE_DIR        = "game_image_cache"
@@ -133,21 +135,16 @@ CHAR_CATEGORIES = {
 
 DEFAULT_ANSWER_TIME = 60
 
+# --- WELCOME MESSAGE (Luffy Style) ---
 WELCOME_MSG = (
-    "👋 *Welcome to Za Sora Game Club!*\n\n"
-    "🎮 *Games available:*\n"
-    "/game — Guess the Character\n"
-    "/year — Guess the Release Year\n"
-    "/picture — Scrambled Image Guessing\n"
-    "/trivia — Trivia Quiz\n"
-    "/spin — Wheel of Fortune\n"
-    "/versus @user — Challenge someone\n\n"
-    "🏆 /leaderboard — Rankings\n"
-    "📊 /mystats — Your stats\n"
-    "👤 /profile — Your profile card\n"
-    "🛒 /shop — Spend your points\n"
-    "📖 /help — Full command list\n\n"
-    "_Good luck and have fun!_ 🔥"
+    "☠️ *KONO BOT WA!* ☠️\n\n"
+    "Ore wa Monkey D. Luffy! Kaizoku-ou ni naru otoko da! 🏴‍☠️\n\n"
+    "This isn't just a bot — it's our Nakama! A place where we\n"
+    "sail together, challenge each other, and become stronger!\n\n"
+    "🏆 *Our Dream:* To build the greatest crew of gamers,\n"
+    "where everyone earns their place through skill and guts!\n\n"
+    "⚔️ Ready to join the adventure? Type /help and let's go!\n\n"
+    "*ZAAA SORAAA!* 🌊🔥"
 )
 
 # ============================================================
@@ -198,15 +195,20 @@ SHOP_TITLES = [
     {"id": "double_down",   "name": "⬆️ Double Down",     "cost": 150},
 ]
 
-# --- WHEEL OF FORTUNE ---
+# --- WHEEL OF FORTUNE (Balanced) ---
 WHEEL_SLOTS = [
-    {"name": "50 pts", "points": 50, "weight": 30},
-    {"name": "100 pts", "points": 100, "weight": 20},
-    {"name": "20 pts", "points": 20, "weight": 25},
-    {"name": "Hint Token x1", "hint_token": 1, "weight": 10},
-    {"name": "Hint Token x3", "hint_token": 3, "weight": 5},
+    # Positive (approx 50%)
+    {"name": "50 pts", "points": 50, "weight": 10},
+    {"name": "30 pts", "points": 30, "weight": 15},
+    {"name": "20 pts", "points": 20, "weight": 15},
+    {"name": "Hint Token x2", "hint_token": 2, "weight": 5},
     {"name": "Double XP (1h)", "double_xp": 3600, "weight": 5},
+    # Negative (approx 50%)
+    {"name": "-5 pts", "points": -5, "weight": 15},
+    {"name": "-10 pts", "points": -10, "weight": 15},
+    {"name": "-20 pts", "points": -20, "weight": 8},
     {"name": "Bankrupt!", "bankrupt": True, "weight": 5},
+    {"name": "Nothing!", "points": 0, "weight": 7},
 ]
 
 # --- ACHIEVEMENTS / BADGES ---
