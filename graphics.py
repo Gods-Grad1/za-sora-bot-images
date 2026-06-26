@@ -262,50 +262,42 @@ def build_table_image_raw(bot, rows_data):
         HDR_H  = 90
         COL_H  = 32
         rows   = rows_data[1:]
-        IMG_H  = HDR_H + COL_H + len(rows) * ROW_H + 20
+        IMG_H  = HDR_H + COL_H + len(rows) * ROW_H + 20 + 30  # extra for footer
 
-        WHITE       = (255, 255, 255)
-        BG_ROW_ALT  = (247, 247, 249)
-        HDR_COLOR   = (15, 15, 20)
-        TEXT_DARK   = (20, 20, 25)
-        TEXT_MID    = (80, 80, 90)
-        TEXT_LABEL  = (120, 120, 130)
-        GOLD        = hex_to_rgb(config.THEME_ACCENT_GOLD)
-        SILVER      = hex_to_rgb(config.THEME_ACCENT_SILVER)
-        BRONZE      = hex_to_rgb(config.THEME_ACCENT_BRONZE)
-        GREEN       = hex_to_rgb(config.THEME_ACCENT)
-        RED         = hex_to_rgb(config.THEME_ACCENT_RED)
-        DIVIDER     = (220, 220, 225)
-
-        ROW_GOLD_BG   = (255, 250, 225)
-        ROW_SILVER_BG = (245, 245, 250)
-        ROW_BRONZE_BG = (255, 248, 240)
-
-        f_name  = get_font(14)
-        f_label = get_font(11)
-        f_bold  = get_font(15, bold=True)
-        f_title = get_font(18, bold=True)
-
-        bg    = Image.new("RGB", (IMG_W, IMG_H), WHITE)
+        # Dark theme with gradient background
+        bg = Image.new("RGB", (IMG_W, IMG_H), hex_to_rgb(config.THEME_BG))
         bdraw = ImageDraw.Draw(bg)
+        r1,g1,b1 = hex_to_rgb(config.THEME_BG)
+        r2,g2,b2 = hex_to_rgb(config.THEME_BG_GRADIENT)
+        for y in range(IMG_H):
+            t = y / IMG_H
+            bdraw.line([(0,y),(IMG_W,y)], fill=(
+                int(r1+(r2-r1)*t), int(g1+(g2-g1)*t), int(b1+(b2-b1)*t)
+            ))
 
-        bdraw.rectangle([0, 0, IMG_W, HDR_H], fill=HDR_COLOR)
-        bdraw.rectangle([0, 0, IMG_W, 5], fill=hex_to_rgb(config.THEME_ACCENT))
-        draw_football(bdraw, IMG_W - 55, 45, 36, alpha=25)
-        draw_trophy(bdraw, IMG_W - 105, HDR_H - 10, 28,
-                    color=GOLD, alpha=30)
-        bdraw.text((20, 14), "ZA SORA ZENITH LEAGUE",
-                   fill=GOLD, font=f_title)
-        bdraw.text((20, 46), "STANDINGS",
-                   fill=(160, 160, 170), font=f_label)
+        # Top accent bar (gold)
+        bdraw.rectangle([0, 0, IMG_W, 5], fill=hex_to_rgb(config.THEME_ACCENT_GOLD))
+
+        # Header
+        f_title = get_font(18, bold=True)
+        f_label = get_font(11)
+        f_name  = get_font(14)
+        f_bold  = get_font(15, bold=True)
+        f_foot  = get_font(12)
+
+        bdraw.text((20, 14), "🏆  ZA SORA ZENITH LEAGUE",
+                   fill=hex_to_rgb(config.THEME_ACCENT_GOLD), font=f_title)
+        bdraw.text((20, 48), "STANDINGS",
+                   fill=hex_to_rgb(config.THEME_TEXT_MUTED), font=f_label)
         date_str = datetime.datetime.now().strftime("%d %b %Y")
         tw = int(text_w(bdraw, date_str, f_label))
         bdraw.text((IMG_W - tw - 16, 14), date_str,
-                   fill=(160, 160, 170), font=f_label)
+                   fill=hex_to_rgb(config.THEME_TEXT_MUTED), font=f_label)
 
+        # Column headers
         cy = HDR_H + 7
         bdraw.rectangle([0, HDR_H, IMG_W, HDR_H + COL_H],
-                        fill=(235, 235, 240))
+                        fill=hex_to_rgb(config.THEME_CARD_BG))
         cols = [
             (8,   "POS"), (50,  "TEAM"),
             (250, "P"),   (290, "W"),  (325, "D"),  (360, "L"),
@@ -313,14 +305,14 @@ def build_table_image_raw(bot, rows_data):
         ]
         for cx_col, label in cols:
             bdraw.text((cx_col, cy), label,
-                       fill=TEXT_LABEL, font=f_label)
+                       fill=hex_to_rgb(config.THEME_TEXT_MUTED), font=f_label)
         bdraw.line([(0, HDR_H + COL_H), (IMG_W, HDR_H + COL_H)],
-                   fill=DIVIDER, width=2)
+                   fill=hex_to_rgb(config.THEME_LINE), width=2)
 
         rank_data = {
-            1: (GOLD,   ROW_GOLD_BG),
-            2: (SILVER, ROW_SILVER_BG),
-            3: (BRONZE, ROW_BRONZE_BG),
+            1: (config.THEME_ACCENT_GOLD,   config.THEME_ROW_GOLD,   "🥇"),
+            2: (config.THEME_ACCENT_SILVER,  config.THEME_ROW_SILVER, "🥈"),
+            3: (config.THEME_ACCENT_BRONZE,  config.THEME_ROW_BRONZE, "🥉"),
         }
 
         for i, row in enumerate(rows):
@@ -332,25 +324,30 @@ def build_table_image_raw(bot, rows_data):
             rank_int = int(rank_val) if rank_val.isdigit() else i + 1
 
             if rank_int in rank_data:
-                accent_c, row_bg = rank_data[rank_int]
-                bdraw.rectangle([0, ry, IMG_W, ry + ROW_H], fill=row_bg)
-                draw_accent_bar(bdraw, 0, ry, ROW_H,
-                                rgb_to_hex(*accent_c), width=5)
+                accent_c, row_bg, medal = rank_data[rank_int]
+                bdraw.rectangle([0, ry, IMG_W, ry + ROW_H],
+                                fill=hex_to_rgb(row_bg))
+                draw_accent_bar(bdraw, 0, ry, ROW_H, accent_c, width=5)
+                if rank_int == 1:
+                    draw_crown(bdraw, 28, ry - 10, 12,
+                               color=hex_to_rgb(config.THEME_ACCENT_GOLD), alpha=60)
             else:
+                accent_c = config.THEME_TEXT_DIM
+                medal    = f"#{rank_int}"
                 if i % 2 == 0:
-                    bdraw.rectangle([0, ry, IMG_W, ry + ROW_H], fill=BG_ROW_ALT)
-                draw_accent_bar(bdraw, 0, ry, ROW_H, "#cccccc", width=5)
+                    bdraw.rectangle([0, ry, IMG_W, ry + ROW_H],
+                                    fill=(*hex_to_rgb(config.THEME_CARD_BG), 50))
+                draw_accent_bar(bdraw, 0, ry, ROW_H, accent_c, width=5)
 
             text_y = ry + (ROW_H - 14) // 2
 
-            pos_color = rank_data.get(rank_int, (TEXT_MID, None))[0]
-            bdraw.text((10, text_y), rank_val,
-                       fill=pos_color, font=f_bold if rank_int <= 3 else f_name)
+            bdraw.text((10, text_y), medal,
+                       fill=hex_to_rgb(accent_c), font=f_bold)
 
             name = row[1].strip() if len(row) > 1 else "?"
-            name_color = pos_color if rank_int <= 3 else TEXT_DARK
+            name_color = accent_c if rank_int <= 3 else config.THEME_TEXT_PRIMARY
             bdraw.text((50, text_y), name,
-                       fill=name_color,
+                       fill=hex_to_rgb(name_color),
                        font=f_bold if rank_int <= 3 else f_name)
 
             def safe(idx):
@@ -360,18 +357,24 @@ def build_table_image_raw(bot, rows_data):
                 (safe(2), 250), (safe(3), 290), (safe(4), 325), (safe(5), 360),
                 (safe(6), 398), (safe(7), 438),
             ]:
-                bdraw.text((cx_col, text_y), val, fill=TEXT_MID, font=f_name)
+                bdraw.text((cx_col, text_y), val, fill=hex_to_rgb(config.THEME_TEXT_MUTED), font=f_name)
 
             gd_val = safe(8)
             gd_int = int(gd_val) if gd_val.lstrip('-').isdigit() else 0
-            gd_color = GREEN if gd_int > 0 else RED if gd_int < 0 else TEXT_MID
-            bdraw.text((478, text_y), gd_val, fill=gd_color, font=f_bold)
+            gd_color = config.THEME_ACCENT if gd_int > 0 else config.THEME_ACCENT_RED if gd_int < 0 else config.THEME_TEXT_MUTED
+            bdraw.text((478, text_y), gd_val, fill=hex_to_rgb(gd_color), font=f_bold)
 
-            pts_color = pos_color if rank_int <= 3 else GREEN
-            bdraw.text((523, text_y), safe(9), fill=pts_color, font=f_bold)
+            pts_color = accent_c if rank_int <= 3 else config.THEME_ACCENT
+            bdraw.text((523, text_y), safe(9), fill=hex_to_rgb(pts_color), font=f_bold)
 
             bdraw.line([(8, ry + ROW_H - 1), (IMG_W - 8, ry + ROW_H - 1)],
-                       fill=DIVIDER, width=1)
+                       fill=hex_to_rgb(config.THEME_LINE), width=1)
+
+        # Footer
+        foot_text = "ZA SORA GAME CLUB"
+        tw = text_w(bdraw, foot_text, f_foot)
+        bdraw.text(((IMG_W - tw)//2, IMG_H - 18), foot_text,
+                   fill=hex_to_rgb(config.THEME_TEXT_MUTED), font=f_foot)
 
         bio = BytesIO()
         bg.save(bio, 'PNG')
@@ -384,7 +387,7 @@ def build_table_image_raw(bot, rows_data):
         return None
 
 # ---------------------------------------------------------------------------
-# FIXTURES IMAGE
+# FIXTURES IMAGE (kept as is – already dark theme)
 # ---------------------------------------------------------------------------
 
 def generate_fixtures_image(bot, rows, status_filter, player_filter,
@@ -505,7 +508,7 @@ def build_fixtures_image_page_raw(bot, matches, status_filter, player_filter,
         IMG_W  = 650
         ROW_H  = 58
         HDR_H  = 85
-        IMG_H  = HDR_H + len(matches) * ROW_H + 16
+        IMG_H  = HDR_H + len(matches) * ROW_H + 16 + 30
 
         f_name  = get_font(14)
         f_label = get_font(11)
@@ -513,6 +516,7 @@ def build_fixtures_image_page_raw(bot, matches, status_filter, player_filter,
         f_score = get_font(16, bold=True)
         f_title = get_font(17, bold=True)
         f_md    = get_font(10)
+        f_foot  = get_font(12)
 
         is_completed = status_filter.lower() == 'completed'
         top_color    = config.THEME_COMPLETED_BG if is_completed else config.THEME_UPCOMING_BG
@@ -607,6 +611,12 @@ def build_fixtures_image_page_raw(bot, matches, status_filter, player_filter,
             bdraw.line([(10, ry + ROW_H - 1), (IMG_W - 10, ry + ROW_H - 1)],
                        fill=hex_to_rgb(config.THEME_LINE), width=1)
 
+        # Footer
+        foot_text = "ZA SORA GAME CLUB"
+        tw = text_w(bdraw, foot_text, f_foot)
+        bdraw.text(((IMG_W - tw)//2, IMG_H - 18), foot_text,
+                   fill=hex_to_rgb(config.THEME_TEXT_MUTED), font=f_foot)
+
         bio = BytesIO()
         bg.save(bio, 'PNG')
         bio.seek(0)
@@ -622,7 +632,7 @@ def build_matchday_image_raw(bot, matches, matchday):
         IMG_W  = 650
         ROW_H  = 58
         HDR_H  = 85
-        IMG_H  = HDR_H + len(matches) * ROW_H + 16
+        IMG_H  = HDR_H + len(matches) * ROW_H + 16 + 30
 
         f_name  = get_font(14)
         f_label = get_font(11)
@@ -630,6 +640,7 @@ def build_matchday_image_raw(bot, matches, matchday):
         f_score = get_font(16, bold=True)
         f_title = get_font(17, bold=True)
         f_md    = get_font(10)
+        f_foot  = get_font(12)
 
         bg    = Image.new("RGB", (IMG_W, IMG_H), hex_to_rgb(config.THEME_BG))
         bdraw = ImageDraw.Draw(bg)
@@ -711,6 +722,12 @@ def build_matchday_image_raw(bot, matches, matchday):
             bdraw.line([(10, ry + ROW_H - 1), (IMG_W - 10, ry + ROW_H - 1)],
                        fill=hex_to_rgb(config.THEME_LINE), width=1)
 
+        # Footer
+        foot_text = "ZA SORA GAME CLUB"
+        tw = text_w(bdraw, foot_text, f_foot)
+        bdraw.text(((IMG_W - tw)//2, IMG_H - 18), foot_text,
+                   fill=hex_to_rgb(config.THEME_TEXT_MUTED), font=f_foot)
+
         bio = BytesIO()
         bg.save(bio, 'PNG')
         bio.seek(0)
@@ -787,50 +804,243 @@ def draw_badge_icon(draw, x, y, badge_id, size=24):
     return x + size + 4
 
 # ---------------------------------------------------------------------------
-# PROFILE CARD
+# PROFILE CARD (New design with avatar)
 # ---------------------------------------------------------------------------
 
-def build_profile_card(chat_id, user_id, username=None):
-    """Generates a full user profile card with badges."""
-    data = database.load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
+def build_profile_card(chat_id, user_id, username=None, bot=None):
+    """Generates a modern, gaming‑style profile card with avatar."""
+    from PIL import Image, ImageDraw, ImageFont
+    from io import BytesIO
+
+    data = database.load_json(config.USER_DATA_FILE, {})
     user_str = str(user_id)
-    if chat_str not in data or user_str not in data[chat_str]:
+    if user_str not in data:
         return None
-    u = data[chat_str][user_str]
+    u = data[user_str]
     username = username or u.get("username", "Player")
 
+    # Gather stats
     title = database._get_active_title(u) or "No Title"
     points = u.get("points", 0)
+    alltime = u.get("alltime_points", 0)
     streak = u.get("streak", 0)
     best_streak = u.get("best_streak", 0)
     played = u.get("games_played", 0)
     correct = u.get("correct", 0)
     accuracy = f"{int((correct / played) * 100)}%" if played > 0 else "N/A"
-    badges = u.get("badges", [])
+    badges = u.get("badges", [])[:6]  # Show max 6 badges
 
-    lines = [
-        f"🏅 Title: {title}",
-        f"💰 Points: {points}",
-        f"🔥 Streak: {streak} (Best: {best_streak})",
-        f"🎯 Accuracy: {accuracy} ({correct}/{played})",
-        "",
-        "📛 Badges:",
-    ]
-    if badges:
-        badge_icons = " ".join([config.ACHIEVEMENTS.get(b, {}).get("icon", "🏅") for b in badges])
-        lines.append(badge_icons)
-        badge_names = ", ".join([config.ACHIEVEMENTS.get(b, {}).get("name", b) for b in badges])
-        lines.append(f"_{badge_names}_")
+    W = 650
+    H = 650  # Fixed height
+    bg = Image.new("RGB", (W, H), hex_to_rgb(config.THEME_BG))
+    draw = ImageDraw.Draw(bg)
+
+    # Gradient background
+    r1,g1,b1 = hex_to_rgb(config.THEME_BG)
+    r2,g2,b2 = hex_to_rgb(config.THEME_BG_GRADIENT)
+    for y in range(H):
+        t = y / H
+        draw.line([(0,y),(W,y)], fill=(
+            int(r1+(r2-r1)*t), int(g1+(g2-g1)*t), int(b1+(b2-b1)*t)
+        ))
+
+    # Top accent bar (gold)
+    draw.rectangle([0, 0, W, 4], fill=hex_to_rgb(config.THEME_ACCENT_GOLD))
+
+    # Avatar circle
+    avatar_radius = 45
+    avatar_center = (70, 80)
+    # Try to fetch avatar from Telegram
+    avatar_img = None
+    if bot:
+        try:
+            photos = bot.get_user_profile_photos(user_id, limit=1)
+            if photos.total_count > 0:
+                file_id = photos.photos[0][-1].file_id
+                file_info = bot.get_file(file_id)
+                downloaded_file = bot.download_file(file_info.file_path)
+                avatar_img = Image.open(BytesIO(downloaded_file))
+        except Exception:
+            pass
+
+    if avatar_img:
+        # Resize and circle-crop avatar
+        avatar_img = avatar_img.resize((avatar_radius*2, avatar_radius*2), Image.Resampling.LANCZOS)
+        mask = Image.new('L', (avatar_radius*2, avatar_radius*2), 0)
+        mask_draw = ImageDraw.Draw(mask)
+        mask_draw.ellipse((0, 0, avatar_radius*2, avatar_radius*2), fill=255)
+        avatar_img.putalpha(mask)
+        bg.paste(avatar_img, (avatar_center[0]-avatar_radius, avatar_center[1]-avatar_radius), avatar_img)
     else:
-        lines.append("_None yet. Keep playing!_")
+        # Fallback: colored circle with initial
+        draw.ellipse(
+            (avatar_center[0]-avatar_radius, avatar_center[1]-avatar_radius,
+             avatar_center[0]+avatar_radius, avatar_center[1]+avatar_radius),
+            fill=hex_to_rgb(config.THEME_ACCENT)
+        )
+        f_avatar = get_font(30, bold=True)
+        tw = text_w(draw, username[0].upper(), f_avatar)
+        draw.text(
+            (avatar_center[0] - tw//2, avatar_center[1] - 15),
+            username[0].upper(),
+            fill=hex_to_rgb(config.THEME_TEXT_PRIMARY),
+            font=f_avatar
+        )
 
-    return draw_card(
-        header_text=f"👤 {username}",
-        body_lines=lines,
-        footer_text="Za Sora Game Club",
-        accent_color=config.THEME_ACCENT_GOLD
-    )
+    # Username
+    f_name = get_font(22, bold=True)
+    draw.text((140, 55), username, fill=hex_to_rgb(config.THEME_TEXT_PRIMARY), font=f_name)
+
+    # Title (below username)
+    f_title = get_font(14)
+    draw.text((140, 90), f"🏅 {title}", fill=hex_to_rgb(config.THEME_TEXT_MUTED), font=f_title)
+
+    # Stats grid (4 boxes)
+    stats = [
+        ("💰 Points", str(points)),
+        ("🔥 Streak", f"{streak} (Best {best_streak})"),
+        ("🎯 Accuracy", accuracy),
+        ("🎮 Games", str(played)),
+    ]
+    box_w = 135
+    box_h = 60
+    gap = 10
+    start_x = 30
+    start_y = 150
+    for i, (label, value) in enumerate(stats):
+        x = start_x + i * (box_w + gap)
+        draw.rounded_rectangle(
+            [x, start_y, x+box_w, start_y+box_h],
+            radius=8,
+            fill=hex_to_rgb(config.THEME_CARD_BG)
+        )
+        f_val = get_font(16, bold=True)
+        tw = text_w(draw, value, f_val)
+        draw.text((x + (box_w - tw)//2, start_y + 8), value, fill=hex_to_rgb(config.THEME_ACCENT_GOLD), font=f_val)
+        f_lbl = get_font(10)
+        tw2 = text_w(draw, label, f_lbl)
+        draw.text((x + (box_w - tw2)//2, start_y + box_h - 18), label, fill=hex_to_rgb(config.THEME_TEXT_MUTED), font=f_lbl)
+
+    # Badges section
+    badge_y = 240
+    draw.text((30, badge_y), "📛 BADGES", fill=hex_to_rgb(config.THEME_TEXT_PRIMARY), font=get_font(14, bold=True))
+    if badges:
+        badge_x = 30
+        for badge_id in badges[:6]:
+            badge = config.ACHIEVEMENTS.get(badge_id, {})
+            icon = badge.get("icon", "🏅")
+            name = badge.get("name", badge_id)
+            # Draw badge circle
+            draw.ellipse(
+                [badge_x, badge_y+30, badge_x+40, badge_y+70],
+                fill=hex_to_rgb(config.THEME_ACCENT_PURPLE)
+            )
+            f_badge = get_font(18)
+            tw = text_w(draw, icon, f_badge)
+            draw.text((badge_x + (40 - tw)//2, badge_y + 36), icon, fill=(255,255,255), font=f_badge)
+            # Badge name below
+            f_name_small = get_font(9)
+            tw2 = text_w(draw, name[:10], f_name_small)
+            draw.text((badge_x + (40 - tw2)//2, badge_y + 72), name[:10], fill=hex_to_rgb(config.THEME_TEXT_MUTED), font=f_name_small)
+            badge_x += 55
+    else:
+        draw.text((30, badge_y+35), "None yet. Keep playing!", fill=hex_to_rgb(config.THEME_TEXT_MUTED), font=get_font(14))
+
+    # Status / Bio (bottom)
+    status_y = 340
+    draw.rectangle([20, status_y, W-20, status_y+60], fill=hex_to_rgb(config.THEME_CARD_BG))
+    # Use a random quote or the user's title
+    quote = database.get_random_quote()
+    if quote:
+        status_text = f"💬 {quote['text'][:60]}"
+    else:
+        status_text = f"💬 {username} is ready to play!"
+    f_status = get_font(12)
+    tw = text_w(draw, status_text, f_status)
+    if tw > W - 60:
+        status_text = status_text[:55] + "..."
+    draw.text((35, status_y+20), status_text, fill=hex_to_rgb(config.THEME_TEXT_PRIMARY), font=f_status)
+
+    # Footer
+    f_foot = get_font(12)
+    foot_text = "ZA SORA GAME CLUB"
+    tw = text_w(draw, foot_text, f_foot)
+    draw.text(((W - tw)//2, H-25), foot_text, fill=hex_to_rgb(config.THEME_TEXT_MUTED), font=f_foot)
+
+    bio = BytesIO()
+    bg.save(bio, 'PNG')
+    bio.seek(0)
+    return bio
+
+# ---------------------------------------------------------------------------
+# CREW BANNER (Collage of group members)
+# ---------------------------------------------------------------------------
+
+def build_crew_banner(chat_id, bot):
+    """Generates a collage of all members' profile pictures in a group."""
+    from PIL import Image, ImageDraw, ImageFont
+    from io import BytesIO
+    import requests
+
+    members = database.get_all_members(chat_id)
+    if not members:
+        return None
+
+    # We'll create a grid of avatars (max 9 shown)
+    # For each member, try to fetch their profile photo
+    avatars = []
+    for uid, uname in members[:9]:
+        try:
+            photos = bot.get_user_profile_photos(uid, limit=1)
+            if photos.total_count > 0:
+                file_id = photos.photos[0][-1].file_id
+                file_info = bot.get_file(file_id)
+                downloaded_file = bot.download_file(file_info.file_path)
+                avatar = Image.open(BytesIO(downloaded_file))
+                avatar = avatar.resize((100, 100), Image.Resampling.LANCZOS)
+                avatars.append(avatar)
+            else:
+                # Placeholder
+                avatar = Image.new('RGB', (100, 100), hex_to_rgb(config.THEME_CARD_BG))
+                draw = ImageDraw.Draw(avatar)
+                draw.text((30, 40), uname[0].upper(), fill=hex_to_rgb(config.THEME_ACCENT))
+                avatars.append(avatar)
+        except Exception:
+            avatar = Image.new('RGB', (100, 100), hex_to_rgb(config.THEME_CARD_BG))
+            draw = ImageDraw.Draw(avatar)
+            draw.text((30, 40), uname[0].upper(), fill=hex_to_rgb(config.THEME_ACCENT))
+            avatars.append(avatar)
+
+    if not avatars:
+        return None
+
+    # Grid layout
+    cols = 3
+    rows = (len(avatars) + cols - 1) // cols
+    grid_w = 100 * cols
+    grid_h = 100 * rows
+    bg = Image.new("RGB", (grid_w + 40, grid_h + 70), hex_to_rgb(config.THEME_BG))
+    draw = ImageDraw.Draw(bg)
+    draw.rectangle([0, 0, bg.width, bg.height], fill=hex_to_rgb(config.THEME_BG))
+
+    # Header
+    f_title = get_font(18, bold=True)
+    draw.text((20, 15), "👥 CREW BANNER", fill=hex_to_rgb(config.THEME_ACCENT_GOLD), font=f_title)
+    draw.text((20, 42), f"{len(avatars)} members", fill=hex_to_rgb(config.THEME_TEXT_MUTED), font=get_font(12))
+
+    x = 20
+    y = 70
+    for i, avatar in enumerate(avatars):
+        bg.paste(avatar, (x, y))
+        x += 100
+        if (i + 1) % cols == 0:
+            x = 20
+            y += 100
+
+    bio = BytesIO()
+    bg.save(bio, 'PNG')
+    bio.seek(0)
+    return bio
 
 # ---------------------------------------------------------------------------
 # LEADERBOARD (with pagination)
