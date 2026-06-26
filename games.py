@@ -321,6 +321,7 @@ def send_year_category_picker(bot, chat_id):
                      reply_markup=markup, parse_mode="Markdown")
 
 def send_trivia_category_picker(bot, chat_id):
+    """Used by /trivia command to let users choose a category."""
     import telebot
     markup = telebot.types.InlineKeyboardMarkup(row_width=2)
     icons  = ["🎮","👤","🎬","🌍","🍕","⚽","💻","📖"]
@@ -386,8 +387,8 @@ def process_hint(bot, message=None, call=None):
 
     has_token = database.use_hint_token(bot, chat_id, user_id, username)
     if not has_token:
-        data        = database.load_json(config.GROUP_DATA_FILE, {})
-        current_pts = data.get(str(chat_id), {}).get(str(user_id), {}).get("points", 0)
+        user = database.get_user(user_id)
+        current_pts = user.get("points", 0)
         if current_pts < config.POINTS_HINT_PENALTY:
             reply(f"❌ Not enough points for a hint. You have *{current_pts}* pts but need *{config.POINTS_HINT_PENALTY}* pts.")
             return
@@ -800,13 +801,11 @@ def handle_trivia_answer(bot, call):
             bot, chat_id, user_id, username, config.POINTS_TRIVIA)
         streak_txt = f" 🔥 Streak x{int(mult)}!" if streak > 1 else ""
 
-        data = database.load_json(config.GROUP_DATA_FILE, {})
-        chat_str = str(chat_id)
-        user_str = str(user_id)
-        u = database.get_user(data, chat_str, user_str, username)
-        u["trivia_correct"] = u.get("trivia_correct", 0) + 1
-        database.save_json(bot, config.GROUP_DATA_FILE, data)
-        database.check_achievements(bot, chat_id, user_id, username)
+        # Track trivia correct
+        user = database.get_user(user_id, username)
+        user["trivia_correct"] = user.get("trivia_correct", 0) + 1
+        database.save_user(bot, user_id, user)
+        database.check_achievements(bot, user_id, username)
 
         bot.answer_callback_query(call.id, f"✅ CORRECT! +{final} pts{streak_txt}", show_alert=True)
 
@@ -988,8 +987,8 @@ def handle_versus_bet(bot, call):
             f"⚠️ Already bet {existing['amount']} pts on {pname}!", show_alert=True)
         return
 
-    pts_data = database.load_json(config.GROUP_DATA_FILE, {})
-    user_pts = pts_data.get(str(chat_id), {}).get(str(user_id), {}).get("points", 0)
+    user = database.get_user(user_id, username)
+    user_pts = user.get("points", 0)
     if user_pts < amount:
         bot.answer_callback_query(call.id,
             f"❌ Not enough points! You have {user_pts} pts.", show_alert=True)
@@ -1175,13 +1174,10 @@ def _evaluate_round(bot, chat_id):
                              amount=config.POINTS_VERSUS_WIN // 3)
 
         if winner_id:
-            data = database.load_json(config.GROUP_DATA_FILE, {})
-            chat_str = str(chat_id)
-            user_str = str(winner_id)
-            u = database.get_user(data, chat_str, user_str, username)
-            u["versus_wins"] = u.get("versus_wins", 0) + 1
-            database.save_json(bot, config.GROUP_DATA_FILE, data)
-            database.check_achievements(bot, chat_id, winner_id, username)
+            user = database.get_user(winner_id, username)
+            user["versus_wins"] = user.get("versus_wins", 0) + 1
+            database.save_user(bot, winner_id, user)
+            database.check_achievements(bot, winner_id, username)
 
     correct_reveal = ""
     if not (c_correct or t_correct):
@@ -1305,10 +1301,9 @@ def _payout_bets(bot, chat_id, winner_pick):
     if winner_pick is None:
         total = 0
         for uid, bet in bets.items():
-            data = database.load_json(config.GROUP_DATA_FILE, {})
-            u    = database.get_user(data, str(chat_id), str(uid), bet["username"])
-            u["points"] += bet["amount"]
-            database.save_json(bot, config.GROUP_DATA_FILE, data)
+            user = database.get_user(uid, bet["username"])
+            user["points"] += bet["amount"]
+            database.save_user(bot, uid, user)
             total += bet["amount"]
         send_and_delete(bot, chat_id,
             f"🔁 *All bets refunded.* ({total} pts total)",
@@ -1329,10 +1324,9 @@ def _payout_bets(bot, chat_id, winner_pick):
     msg = "💰 *BET RESULTS*\n\n"
     for uid, bet in winners.items():
         winnings = bet["amount"] + int(pot * (bet["amount"] / total_stake))
-        data     = database.load_json(config.GROUP_DATA_FILE, {})
-        u        = database.get_user(data, str(chat_id), str(uid), bet["username"])
-        u["points"] += winnings
-        database.save_json(bot, config.GROUP_DATA_FILE, data)
+        user = database.get_user(uid, bet["username"])
+        user["points"] += winnings
+        database.save_user(bot, uid, user)
         msg += f"✅ *{bet['username']}* — bet {bet['amount']} pts, won *{winnings} pts*!\n"
     for uid, bet in losers.items():
         msg += f"❌ *{bet['username']}* — lost {bet['amount']} pts\n"
@@ -1382,7 +1376,7 @@ def post_daily_challenge(bot):
     groups = database.get_all_groups()
     for group_id in groups:
         try:
-            members  = database.get_all_members(group_id)
+            members = database.get_all_members(group_id)
             tag_line = " ".join([f"[{name}](tg://user?id={uid})" for uid, name in members])
             full_msg = f"{text}\n\n🌱 _Tagging the whole family:_\n{tag_line}"
             bot.send_message(group_id, full_msg, reply_markup=markup, parse_mode="Markdown")
@@ -1414,13 +1408,10 @@ def handle_daily_answer(bot, call):
         pts, streak, mult, final = database.reward_user(
             bot, chat_id, user_id, username, config.POINTS_DAILY_CHALLENGE)
 
-        data = database.load_json(config.GROUP_DATA_FILE, {})
-        chat_str = str(chat_id)
-        user_str = str(user_id)
-        u = database.get_user(data, chat_str, user_str, username)
-        u["daily_wins"] = u.get("daily_wins", 0) + 1
-        database.save_json(bot, config.GROUP_DATA_FILE, data)
-        database.check_achievements(bot, chat_id, user_id, username)
+        user = database.get_user(user_id, username)
+        user["daily_wins"] = user.get("daily_wins", 0) + 1
+        database.save_user(bot, user_id, user)
+        database.check_achievements(bot, user_id, username)
 
         bot.answer_callback_query(call.id, f"✅ CORRECT! +{final} pts!", show_alert=True)
         send_and_delete(bot, chat_id,
@@ -1472,11 +1463,8 @@ def check_user_answer(bot, message):
 
     double_down_active = False
     if session.get("type") in ("character", "picture"):
-        data = database.load_json(config.GROUP_DATA_FILE, {})
-        chat_str = str(chat_id)
-        user_str = str(user_id)
-        u = database.get_user(data, chat_str, user_str, username)
-        if u.get("powerups", {}).get("double_down", 0) > 0:
+        user = database.get_user(user_id, username)
+        if user.get("powerups", {}).get("double_down", 0) > 0:
             double_down_active = True
 
     aliases = session.get("aliases", [])
@@ -1508,12 +1496,9 @@ def check_user_answer(bot, message):
         del active_games[chat_id]
         return True
 
-    data = database.load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    user_str = str(user_id)
-    u = database.get_user(data, chat_str, user_str, username)
-
-    if u.get("powerups", {}).get("streak_freeze", 0) > 0:
+    # Wrong answer – handle streak freeze
+    user = database.get_user(user_id, username)
+    if user.get("powerups", {}).get("streak_freeze", 0) > 0:
         database.use_powerup(bot, chat_id, user_id, "streak_freeze", username)
         send_and_delete(bot, chat_id, "🧊 *Streak Freeze activated!* Your streak is safe this time.")
     else:
