@@ -1,0 +1,1136 @@
+[
+  {
+    "name": "Son Goku",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/af/Son_Goku_Dragon_Ball.png",
+    "hints": [
+      "From: Anime (Dragon Ball)",
+      "About: A powerful Saiyan warrior raised on Earth who protects the universe from cosmic threats."
+    ],
+    "aliases": [
+      "Goku",
+      "Kakarot"
+    ]
+  },
+  {
+    "name": "Naruto Uzumaki",
+    "image": "https://upload.wikimedia.org/wikipedia/en/9/94/NarutoCoverTankobon1.jpg",
+    "hints": [
+      "From: Anime (Naruto)",
+      "About: A spirited young ninja who dreams of overcoming rejection to become his village's leader."
+    ],
+    "aliases": [
+      "Naruto"
+    ]
+  },
+  {
+    "name": "Monkey D. Luffy",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/af/One_Piece_Volume_1_North_American_Cover.jpg",
+    "hints": [
+      "From: Anime (One Piece)",
+      "About: A rubber-bodied pirate captain sailing the high seas in search of the ultimate treasure."
+    ],
+    "aliases": [
+      "Luffy",
+      "Straw Hat"
+    ]
+  },
+  {
+    "name": "Satoru Gojo",
+    "image": "https://upload.wikimedia.org/wikipedia/en/1/1f/Satoru_Gojo_Jujutsu_Kaisen.png",
+    "hints": [
+      "From: Anime (Jujutsu Kaisen)",
+      "About: An unbeatably powerful, blindfold-wearing sorcerer who acts as a mentor to young students."
+    ],
+    "aliases": [
+      "Gojo"
+    ]
+  },
+  {
+    "name": "Levi Ackerman",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/e6/Levi_Ackerman.png",
+    "hints": [
+      "From: Anime (Attack on Titan)",
+      "About: Humanity's strongest, hyper-neat squad captain known for his deadly skills against giant monsters."
+    ],
+    "aliases": [
+      "Levi",
+      "Captain Levi"
+    ]
+  },
+  {
+    "name": "Saitama",
+    "image": "https://upload.wikimedia.org/wikipedia/en/c/c3/OnePunchMan_volume_1_cover.jpg",
+    "hints": [
+      "From: Anime (One Punch Man)",
+      "About: A bald hero for fun who easily defeats any opponent with a single strike and struggles with boredom."
+    ],
+    "aliases": [
+      "One Punch Man",
+      "Caped Baldy"
+    ]
+  },
+  {
+    "name": "Edward Elric",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/e5/Edward_Elric_FMA_character.png",
+    "hints": [
+      "From: Anime (Fullmetal Alchemist)",
+      "About: A short-tempered state alchemist with prosthetic limbs searching for the Philosopher's Stone."
+    ],
+    "aliases": [
+      "Ed",
+      "Fullmetal Alchemist"
+    ]
+  },
+  {
+    "name": "Light Yagami",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a6/Light_Yagami_Death_Note.png",
+    "hints": [
+      "From: Anime (Death Note)",
+      "About: A genius high school student who uses a supernatural notebook to cleanse the world of criminals."
+    ],
+    "aliases": [
+      "Light",
+      "Kira"
+    ]
+  },
+  {
+    "name": "Lelouch Lamperouge",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/e0/Code_Geass_Lelouch_of_the_Rebellion_volume_1_DVD_cover.jpg",
+    "hints": [
+      "From: Anime (Code Geass)",
+      "About: An exiled prince who uses absolute mind-control powers to lead a rebellion against an empire."
+    ],
+    "aliases": [
+      "Lelouch",
+      "Zero"
+    ]
+  },
+  {
+    "name": "Killua Zoldyck",
+    "image": "https://upload.wikimedia.org/wikipedia/en/b/b3/Killua_Zoldyck_Hunter_x_Hunter.png",
+    "hints": [
+      "From: Anime (Hunter x Hunter)",
+      "About: A silver-haired former child assassin who controls lightning and values friendship above all else."
+    ],
+    "aliases": [
+      "Killua"
+    ]
+  },
+  {
+    "name": "Tanjiro Kamado",
+    "image": "https://upload.wikimedia.org/wikipedia/en/2/21/Kimetsu_no_Yaiba_Mugen_Ressha-hen_Poster.jpg",
+    "hints": [
+      "From: Anime (Demon Slayer)",
+      "About: A kind-hearted swordsman traveling to cure his infected sister and avenge his family."
+    ],
+    "aliases": [
+      "Tanjiro"
+    ]
+  },
+  {
+    "name": "Izuku Midoriya",
+    "image": "https://upload.wikimedia.org/wikipedia/en/5/5a/Boku_no_Hero_Academia_Volume_1.png",
+    "hints": [
+      "From: Anime (My Hero Academia)",
+      "About: A once-powerless boy who inherits a legendary superpower to become the ultimate symbol of hope."
+    ],
+    "aliases": [
+      "Deku",
+      "Midoriya"
+    ]
+  },
+  {
+    "name": "Roronoa Zoro",
+    "image": "https://upload.wikimedia.org/wikipedia/en/b/bd/Roronoa_Zoro.png",
+    "hints": [
+      "From: Anime (One Piece)",
+      "About: A green-haired pirate swordsman who fights using three blades simultaneously and easily gets lost."
+    ],
+    "aliases": [
+      "Zoro",
+      "Pirate Hunter"
+    ]
+  },
+  {
+    "name": "Kakashi Hatake",
+    "image": "https://upload.wikimedia.org/wikipedia/en/7/79/Kakashi_Hatake.png",
+    "hints": [
+      "From: Anime (Naruto)",
+      "About: A masked copy-ninja mentor who loves reading romance novels and values teamwork intensely."
+    ],
+    "aliases": [
+      "Kakashi",
+      "Copy Ninja"
+    ]
+  },
+  {
+    "name": "Vegeta",
+    "image": "https://upload.wikimedia.org/wikipedia/en/8/88/Vegeta_Dragon_Ball.png",
+    "hints": [
+      "From: Anime (Dragon Ball)",
+      "About: The proud prince of an extinct alien race who trains relentlessly to surpass his rival."
+    ],
+    "aliases": [
+      "Prince Vegeta"
+    ]
+  },
+  {
+    "name": "Eren Yeager",
+    "image": "https://upload.wikimedia.org/wikipedia/en/d/d6/Shingeki_no_Kyojin_manga_volume_1.jpg",
+    "hints": [
+      "From: Anime (Attack on Titan)",
+      "About: A vengeful youth who swore to wipe out giant threats, later gaining the power to transform into one."
+    ],
+    "aliases": [
+      "Eren",
+      "Attack Titan"
+    ]
+  },
+  {
+    "name": "Gon Freecss",
+    "image": "https://upload.wikimedia.org/wikipedia/en/0/0f/Hunter_%C3%97_Hunter_vol_1.jpg",
+    "hints": [
+      "From: Anime (Hunter x Hunter)",
+      "About: A cheerful, green-clad boy searching for his missing father by entering a dangerous licensed trade."
+    ],
+    "aliases": [
+      "Gon"
+    ]
+  },
+  {
+    "name": "Yuji Itadori",
+    "image": "https://upload.wikimedia.org/wikipedia/en/4/46/Jujutsu_Kaisen_volume_1_cover.jpg",
+    "hints": [
+      "From: Anime (Jujutsu Kaisen)",
+      "About: A highly athletic student who becomes the host of a terrifying demonic curse after eating a finger."
+    ],
+    "aliases": [
+      "Itadori"
+    ]
+  },
+  {
+    "name": "Natsu Dragneel",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/e1/Natsu_Dragneel.png",
+    "hints": [
+      "From: Anime (Fairy Tail)",
+      "About: A hot-headed, motion-sick fire wizard raised by a dragon who fights fiercely for his guild family."
+    ],
+    "aliases": [
+      "Natsu",
+      "Salamander"
+    ]
+  },
+  {
+    "name": "Ichigo Kurosaki",
+    "image": "https://upload.wikimedia.org/wikipedia/en/7/72/Bleach_cover_01.jpg",
+    "hints": [
+      "From: Anime (Bleach)",
+      "About: A orange-haired teenager with the spiritual ability to see ghosts who takes up the mantle of Soul Reaper."
+    ],
+    "aliases": [
+      "Ichigo"
+    ]
+  },
+  {
+    "name": "Sosuke Aizen",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a2/S%C5%8dsuke_Aizen.png",
+    "hints": [
+      "From: Anime (Bleach)",
+      "About: A deceptively polite master manipulator who betrays his peers to achieve absolute godhood."
+    ],
+    "aliases": [
+      "Aizen"
+    ]
+  },
+  {
+    "name": "Shoto Todoroki",
+    "image": "https://upload.wikimedia.org/wikipedia/en/2/22/Shoto_Todoroki.png",
+    "hints": [
+      "From: Anime (My Hero Academia)",
+      "About: A quiet student hero possessing separate fire and ice powers split perfectly down the middle of his body."
+    ],
+    "aliases": [
+      "Shoto",
+      "Todoroki"
+    ]
+  },
+  {
+    "name": "Nezuko Kamado",
+    "image": "https://upload.wikimedia.org/wikipedia/en/0/09/Demon_Slayer_-_Kimetsu_no_Yaiba%2C_volume_1.jpg",
+    "hints": [
+      "From: Anime (Demon Slayer)",
+      "About: A silent demonic transformation survivor who travels inside a wooden box and protects humans."
+    ],
+    "aliases": [
+      "Nezuko"
+    ]
+  },
+  {
+    "name": "Spike Spiegel",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a3/Cowboy_Bebop_Official_Poster.jpg",
+    "hints": [
+      "From: Anime (Cowboy Bebop)",
+      "About: A laid-back, space-faring bounty hunter with a dark syndicate past and exceptional martial arts skills."
+    ],
+    "aliases": [
+      "Spike"
+    ]
+  },
+  {
+    "name": "Shinji Ikari",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/e5/Neon_Genesis_Evangelion_poster.jpg",
+    "hints": [
+      "From: Anime (Neon Genesis Evangelion)",
+      "About: A fragile teenager forced by his detached father to pilot a giant biological mech against alien entities."
+    ],
+    "aliases": [
+      "Shinji"
+    ]
+  },
+  {
+    "name": "Mob (Shigeo Kageyama)",
+    "image": "https://upload.wikimedia.org/wikipedia/en/d/d1/Mob_Psycho_100_volume_1_cover.jpg",
+    "hints": [
+      "From: Anime (Mob Psycho 100)",
+      "About: An unassuming schoolboy who suppresses world-shattering psychic powers that explode at 100% emotional capacity."
+    ],
+    "aliases": [
+      "Mob",
+      "Shigeo"
+    ]
+  },
+  {
+    "name": "Ryomen Sukuna",
+    "image": "https://upload.wikimedia.org/wikipedia/en/3/36/Ryomen_Sukuna.png",
+    "hints": [
+      "From: Anime (Jujutsu Kaisen)",
+      "About: The undisputed King of Curses known for his extreme cruelty, four arms, and cutting sorcery."
+    ],
+    "aliases": [
+      "Sukuna",
+      "King of Curses"
+    ]
+  },
+  {
+    "name": "Mikasa Ackerman",
+    "image": "https://upload.wikimedia.org/wikipedia/en/1/15/Mikasa_Ackerman.png",
+    "hints": [
+      "From: Anime (Attack on Titan)",
+      "About: An elite elite warrior whose sole life focus is guarding her childhood savior from danger."
+    ],
+    "aliases": [
+      "Mikasa"
+    ]
+  },
+  {
+    "name": "Sasuke Uchiha",
+    "image": "https://upload.wikimedia.org/wikipedia/en/4/41/Sasuke_Uchiha.png",
+    "hints": [
+      "From: Anime (Naruto)",
+      "About: A rogue ninja avenger seeking vengeance against his older brother for wiping out their entire clan."
+    ],
+    "aliases": [
+      "Sasuke"
+    ]
+  },
+  {
+    "name": "Alucard",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/ad/Alucard_Hellsing.png",
+    "hints": [
+      "From: Anime (Hellsing)",
+      "About: A near-immortal, dual-pistol-wielding ultimate vampire who serves a specialized monster-hunting agency."
+    ],
+    "aliases": [
+      "Alucard"
+    ]
+  },
+  {
+    "name": "Yusuke Urameshi",
+    "image": "https://upload.wikimedia.org/wikipedia/en/2/2d/Yusuke_Urameshi.png",
+    "hints": [
+      "From: Anime (Yu Yu Hakusho)",
+      "About: A punk high schooler resurrected to serve as a spirit detective defending Earth from under-world threats."
+    ],
+    "aliases": [
+      "Yusuke"
+    ]
+  },
+  {
+    "name": "Gohan",
+    "image": "https://upload.wikimedia.org/wikipedia/en/f/f6/Gohan_Dragon_Ball.png",
+    "hints": [
+      "From: Anime (Dragon Ball)",
+      "About: A peaceful scholar who possesses limitless hidden martial power that unleashes when his loved ones are hurt."
+    ],
+    "aliases": [
+      "Gohan"
+    ]
+  },
+  {
+    "name": "Roy Mustang",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/ab/Roy_Mustang.png",
+    "hints": [
+      "From: Anime (Fullmetal Alchemist)",
+      "About: An ambitious military officer who manipulates oxygen to unleash devastating fire blasts with a snap of his fingers."
+    ],
+    "aliases": [
+      "Roy",
+      "Mustang",
+      "Flame Alchemist"
+    ]
+  },
+  {
+    "name": "L Lawliet",
+    "image": "https://upload.wikimedia.org/wikipedia/en/6/66/L_Lawliet.png",
+    "hints": [
+      "From: Anime (Death Note)",
+      "About: An eccentric, sweet-toothed world-famous detective who crouches on chairs while tracking an elusive magical killer."
+    ],
+    "aliases": [
+      "L",
+      "Ryuzaki"
+    ]
+  },
+  {
+    "name": "Erza Scarlet",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/e0/Erza_Scarlet.png",
+    "hints": [
+      "From: Anime (Fairy Tail)",
+      "About: A strict, armored sword-mage who dynamically swaps armor and weapons mid-combat using spatial magic."
+    ],
+    "aliases": [
+      "Erza",
+      "Titania"
+    ]
+  },
+  {
+    "name": "Ken Kaneki",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/e2/Tokyo_Ghoul_volume_1_cover.jpg",
+    "hints": [
+      "From: Anime (Tokyo Ghoul)",
+      "About: A bookish college student turned half-monster who wrestles with his sanity and the urge to eat humans."
+    ],
+    "aliases": [
+      "Kaneki",
+      "Centipede"
+    ]
+  },
+  {
+    "name": "Rimuru Tempest",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a4/That_Time_I_Got_Reincarnated_as_a_Slime_volume_1_light_novel_cover.jpg",
+    "hints": [
+      "From: Anime (That Time I Got Reincarnated as a Slime)",
+      "About: A corporate worker reincarnated into a magical world as a blue ooze creature who constructs a multi-species nation."
+    ],
+    "aliases": [
+      "Rimuru",
+      "Slime"
+    ]
+  },
+  {
+    "name": "Sung Jinwoo",
+    "image": "https://upload.wikimedia.org/wikipedia/en/0/08/Solo_Leveling_webtoon_volume_1_cover.jpg",
+    "hints": [
+      "From: Anime (Solo Leveling)",
+      "About: The world's weakest monster hunter who obtains a secret game-like interface to level up infinitely."
+    ],
+    "aliases": [
+      "Jinwoo",
+      "Solo Leveling"
+    ]
+  },
+  {
+    "name": "Asuka Langley Soryu",
+    "image": "https://upload.wikimedia.org/wikipedia/en/3/3b/Asuka_Langley_Soryu.png",
+    "hints": [
+      "From: Anime (Neon Genesis Evangelion)",
+      "About: A fiery, red-headed prodigy mech pilot whose aggressive exterior covers massive validation insecurities."
+    ],
+    "aliases": [
+      "Asuka"
+    ]
+  },
+  {
+    "name": "Hisoka Morow",
+    "image": "https://upload.wikimedia.org/wikipedia/en/1/14/Hisoka_Morow.png",
+    "hints": [
+      "From: Anime (Hunter x Hunter)",
+      "About: A deceptive, card-playing jester obsessed with finding and nurturing strong opponents to fight later."
+    ],
+    "aliases": [
+      "Hisoka"
+    ]
+  },
+  {
+    "name": "Madara Uchiha",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/ee/Madara_Uchiha.png",
+    "hints": [
+      "From: Anime (Naruto)",
+      "About: A legendary historical ninja warlord who sought ultimate peace by locking humanity in a permanent dream loop."
+    ],
+    "aliases": [
+      "Madara"
+    ]
+  },
+  {
+    "name": "Sanji",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a8/Vinsmoke_Sanji.png",
+    "hints": [
+      "From: Anime (One Piece)",
+      "About: A suave pirate chef who battles exclusively with powerful leg strikes to keep his culinary hands pristine."
+    ],
+    "aliases": [
+      "Sanji",
+      "Black Leg"
+    ]
+  },
+  {
+    "name": "Bakugo Katsuki",
+    "image": "https://upload.wikimedia.org/wikipedia/en/d/db/Katsuki_Bakugo.png",
+    "hints": [
+      "From: Anime (My Hero Academia)",
+      "About: An incredibly explosive, loud-mouthed rival hero candidate fueled by absolute victory."
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Zenitsu Agatsuma",
+    "image": "https://upload.wikimedia.org/wikipedia/en/d/db/Zenitsu_Agatsuma.png",
+    "hints": [
+      "From: Anime (Demon Slayer)",
+      "About: A cowardly swordsman who only unleashes blindingly fast lightning sword strikes when passed out cold."
+    ],
+    "aliases": [
+      "Zenitsu"
+    ]
+  },
+  {
+    "name": "Megumi Fushiguro",
+    "image": "https://upload.wikimedia.org/wikipedia/en/b/b3/Megumi_Fushiguro.png",
+    "hints": [
+      "From: Anime (Jujutsu Kaisen)",
+      "About: A stoic sorcerer who manipulates shadows to summon a roster of helpful mystical animal familiars."
+    ],
+    "aliases": [
+      "Megumi"
+    ]
+  },
+  {
+    "name": "Meliodas",
+    "image": "https://upload.wikimedia.org/wikipedia/en/b/b5/The_Seven_Deadly_Sins_volume_1.jpg",
+    "hints": [
+      "From: Anime (The Seven Deadly Sins)",
+      "About: A cursed, youthful-looking demon prince who captains a legendary holy knight crew while running a pub."
+    ],
+    "aliases": [
+      "Meliodas"
+    ]
+  },
+  {
+    "name": "Saber",
+    "image": "https://upload.wikimedia.org/wikipedia/en/d/df/Saber_Fate_stay_night.png",
+    "hints": [
+      "From: Anime (Fate/stay night)",
+      "About: A chivalrous warrior spirit modeled after King Arthur who wields an invisible holy sword in a magic war."
+    ],
+    "aliases": [
+      "Saber",
+      "Artoria"
+    ]
+  },
+  {
+    "name": "Kurapika",
+    "image": "https://upload.wikimedia.org/wikipedia/en/b/ba/Kurapika.png",
+    "hints": [
+      "From: Anime (Hunter x Hunter)",
+      "About: A vengeful survivor whose eyes turn scarlet when angry, using conjured chains to trap a bandit group."
+    ],
+    "aliases": [
+      "Kurapika"
+    ]
+  },
+  {
+    "name": "Sesshomaru",
+    "image": "https://upload.wikimedia.org/wikipedia/en/1/11/Sesshomaru.png",
+    "hints": [
+      "From: Anime (InuYasha)",
+      "About: A powerful, pure-blooded dog demon lord who looks down upon humans and his half-demon younger brother."
+    ],
+    "aliases": [
+      "Sesshomaru"
+    ]
+  },
+  {
+    "name": "Ash Ketchum",
+    "image": "https://upload.wikimedia.org/wikipedia/en/c/c4/Ash_Ketchum_Journeys.png",
+    "hints": [
+      "From: Anime (Pokémon)",
+      "About: An eternal 10-year-old monster trainer from Pallet Town who traveled the world to become a champion master."
+    ],
+    "aliases": [
+      "Ash",
+      "Satoshi"
+    ]
+  },
+  {
+    "name": "Guts",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/ee/Guts_Berserk.png",
+    "hints": [
+      "From: Manga (Berserk)",
+      "About: The tragic, one-eyed black swordsman who travels an unholy landscape wielding a massive slab of iron called the Dragonslayer."
+    ],
+    "aliases": [
+      "Guts",
+      "Black Swordsman"
+    ]
+  },
+  {
+    "name": "Denji",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a2/Chainsaw_Man_volume_1_cover.png",
+    "hints": [
+      "From: Manga (Chainsaw Man)",
+      "About: A destitute young man who merges with a canine devil to slice up public safety targets using engine blades protruding from his body."
+    ],
+    "aliases": [
+      "Denji",
+      "Chainsaw Man"
+    ]
+  },
+  {
+    "name": "Miyamoto Musashi",
+    "image": "https://upload.wikimedia.org/wikipedia/en/7/74/Vagabond_Manga_Volume_1.jpg",
+    "hints": [
+      "From: Manga (Vagabond)",
+      "About: A wild, historical swordsman exploring the philosophical and violent path of becoming peerless under heaven."
+    ],
+    "aliases": [
+      "Musashi",
+      "Vagabond"
+    ]
+  },
+  {
+    "name": "Thorfinn Karlsefni",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/ad/Vinland_Saga_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Vinland Saga)",
+      "About: A bitter Viking child soldier seeking battlefield revenge who undergoes a profound transformation into a pacifist pioneer."
+    ],
+    "aliases": [
+      "Thorfinn"
+    ]
+  },
+  {
+    "name": "Jotaro Kujo",
+    "image": "https://upload.wikimedia.org/wikipedia/en/d/db/Jotaro_Kujo.png",
+    "hints": [
+      "From: Manga (JoJo's Bizarre Adventure)",
+      "About: A stern, cap-wearing school student who battles generational evil using a punch-focused spiritual manifestation called Star Platinum."
+    ],
+    "aliases": [
+      "Jotaro"
+    ]
+  },
+  {
+    "name": "Johan Liebert",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/ee/Monster_%28manga%29_v1.jpg",
+    "hints": [
+      "From: Manga (Monster)",
+      "About: A chillingly charismatic, sociopathic mastermind who subtly orchestrates absolute psychological ruin without leaving physical clues."
+    ],
+    "aliases": [
+      "Johan"
+    ]
+  },
+  {
+    "name": "Makima",
+    "image": "https://upload.wikimedia.org/wikipedia/en/c/c5/Makima_Chainsaw_Man.png",
+    "hints": [
+      "From: Manga (Chainsaw Man)",
+      "About: A high-ranking bureaucratic hunt coordinator who manipulates others effortlessly using hidden domination concepts."
+    ],
+    "aliases": [
+      "Makima",
+      "Control Devil"
+    ]
+  },
+  {
+    "name": "Dio Brando",
+    "image": "https://upload.wikimedia.org/wikipedia/en/3/36/Dio_Brando.png",
+    "hints": [
+      "From: Manga (JoJo's Bizarre Adventure)",
+      "About: A power-mad, charismatic vampire who stole his adoptive brother's body and unlocked time-stopping capabilities."
+    ],
+    "aliases": [
+      "Dio"
+    ]
+  },
+  {
+    "name": "Griffith",
+    "image": "https://upload.wikimedia.org/wikipedia/en/0/00/Griffith_Berserk.png",
+    "hints": [
+      "From: Manga (Berserk)",
+      "About: The beautiful leader of a mercenary group who sacrificed his loyal troops to ascend as a demonic savior-god."
+    ],
+    "aliases": [
+      "Griffith",
+      "Femto"
+    ]
+  },
+  {
+    "name": "Aqua Hoshino",
+    "image": "https://upload.wikimedia.org/wikipedia/en/b/b3/Oshi_no_Ko_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Oshi no Ko)",
+      "About: A reincarnated doctor reborn as the son of a beloved performer who enters showbiz to exact tracking revenge for her murder."
+    ],
+    "aliases": [
+      "Aqua"
+    ]
+  },
+  {
+    "name": "Yoichi Isagi",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a2/Blue_Lock_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Blue Lock)",
+      "About: A football striker striving within a cutthroat, jail-like academy to develop absolute spatial egoism."
+    ],
+    "aliases": [
+      "Isagi"
+    ]
+  },
+  {
+    "name": "Shoyo Hinata",
+    "image": "https://upload.wikimedia.org/wikipedia/en/5/5e/Haikyu%21%21_Volume_1.jpg",
+    "hints": [
+      "From: Manga (Haikyuu!!)",
+      "About: A short, energetic athlete who overcomes his lack of height using incredible vertical leaps to play competitive volleyball."
+    ],
+    "aliases": [
+      "Hinata"
+    ]
+  },
+  {
+    "name": "Gabimaru",
+    "image": "https://upload.wikimedia.org/wikipedia/en/f/fc/Hell%27s_Paradise_Hell%27s_Paradise-_Jigokuraku_volume_1.jpg",
+    "hints": [
+      "From: Manga (Hell's Paradise)",
+      "About: An un-executable hollow assassin sent to a supernatural shifting island to source an elixir of immortality for his wife."
+    ],
+    "aliases": [
+      "Gabimaru"
+    ]
+  },
+  {
+    "name": "Shin",
+    "image": "https://upload.wikimedia.org/wikipedia/en/c/c5/Kingdom_manga_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Kingdom)",
+      "About: An orphaned war slave rising through ancient military ranks to become the greatest general under the heavens."
+    ],
+    "aliases": [
+      "Shin"
+    ]
+  },
+  {
+    "name": "Power",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/eb/Power_Chainsaw_Man.png",
+    "hints": [
+      "From: Manga (Chainsaw Man)",
+      "About: A chaotic, cat-loving blood fiend with red horns who loves making up blatant lies and starting fights."
+    ],
+    "aliases": [
+      "Power"
+    ]
+  },
+  {
+    "name": "Joseph Joestar",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a4/Joseph_Joestar.png",
+    "hints": [
+      "From: Manga (JoJo's Bizarre Adventure)",
+      "About: A trickster hero known for predicting his opponents next lines and executing tactical retreats."
+    ],
+    "aliases": [
+      "Joseph"
+    ]
+  },
+  {
+    "name": "Aki Hayakawa",
+    "image": "https://upload.wikimedia.org/wikipedia/en/7/77/Aki_Hayakawa.png",
+    "hints": [
+      "From: Manga (Chainsaw Man)",
+      "About: A stoic hunter tracking a gun monstrosity using contracts with sword, fox, and future entities."
+    ],
+    "aliases": [
+      "Aki"
+    ]
+  },
+  {
+    "name": "Punpun Onodera",
+    "image": "https://upload.wikimedia.org/wikipedia/en/c/cc/Oyasumi_Punpun_v01.jpg",
+    "hints": [
+      "From: Manga (Goodnight Punpun)",
+      "About: A caricatured bird-like youth dealing with deep depression, existential dread, and domestic trauma."
+    ],
+    "aliases": [
+      "Punpun"
+    ]
+  },
+  {
+    "name": "Friend",
+    "image": "https://upload.wikimedia.org/wikipedia/en/8/87/20th_Century_Boys_vol_1.jpg",
+    "hints": [
+      "From: Manga (20th Century Boys)",
+      "About: A masked cult leader who executes a childhood playbook of global destruction to take over civilization."
+    ],
+    "aliases": [
+      "Friend"
+    ]
+  },
+  {
+    "name": "Kenji Endo",
+    "image": "https://upload.wikimedia.org/wikipedia/en/8/87/20th_Century_Boys_vol_1.jpg",
+    "hints": [
+      "From: Manga (20th Century Boys)",
+      "About: A convenience store clerk turned underground resistance fighter trying to save the world using forgotten childhood memories."
+    ],
+    "aliases": [
+      "Kenji"
+    ]
+  },
+  {
+    "name": "Askeladd",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/ad/Vinland_Saga_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Vinland Saga)",
+      "About: A brilliant, cynical mercenary captain of Welsh descent who masterfully manipulates Nordic politics."
+    ],
+    "aliases": [
+      "Askeladd"
+    ]
+  },
+  {
+    "name": "Tobio Kageyama",
+    "image": "https://upload.wikimedia.org/wikipedia/en/5/5e/Haikyu%21%21_Volume_1.jpg",
+    "hints": [
+      "From: Manga (Haikyuu!!)",
+      "About: A tyrannical genius volleyball setter called the King of the Court who learns to adapt to a team dynamic."
+    ],
+    "aliases": [
+      "Kageyama"
+    ]
+  },
+  {
+    "name": "Seishiro Nagi",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a2/Blue_Lock_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Blue Lock)",
+      "About: A lazy, video-game loving prodigy soccer player with world-class ball trap control."
+    ],
+    "aliases": [
+      "Nagi"
+    ]
+  },
+  {
+    "name": "Sano Manjiro (Mikey)",
+    "image": "https://upload.wikimedia.org/wikipedia/en/9/9f/Tokyo_Revengers_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Tokyo Revengers)",
+      "About: The charismatic, short leader of the Tokyo Manji gang famous for his unbeatable nuclear kick mechanics."
+    ],
+    "aliases": [
+      "Mikey",
+      "Manjiro"
+    ]
+  },
+  {
+    "name": "Takemichi Hanagaki",
+    "image": "https://upload.wikimedia.org/wikipedia/en/9/9f/Tokyo_Revengers_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Tokyo Revengers)",
+      "About: A weeping middle-aged leap-tracker who jumps back to his school days to prevent a tragic gang timeline."
+    ],
+    "aliases": [
+      "Takemichi"
+    ]
+  },
+  {
+    "name": "Chihiro Rokuhira",
+    "image": "https://upload.wikimedia.org/wikipedia/en/2/29/Kagurabachi_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Kagurabachi)",
+      "About: A somber young swordsman hunting enchanted blades using black, red, and scatter goldfish techniques."
+    ],
+    "aliases": [
+      "Chihiro"
+    ]
+  },
+  {
+    "name": "Rudo",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/ad/Gachiakuta_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Gachiakuta)",
+      "About: A slum-dweller thrown into an abyss of trash who uses special gloves to convert everyday waste into combat tools."
+    ],
+    "aliases": [
+      "Rudo"
+    ]
+  },
+  {
+    "name": "Momo Ayase",
+    "image": "https://upload.wikimedia.org/wikipedia/en/4/4b/Dandadan_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Dandadan)",
+      "About: A gyaru student who believes in spirits and awakens telekinetic aura hands after an alien abduction attempt."
+    ],
+    "aliases": [
+      "Momo"
+    ]
+  },
+  {
+    "name": "Okarun (Ken Takakura)",
+    "image": "https://upload.wikimedia.org/wikipedia/en/4/4b/Dandadan_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Dandadan)",
+      "About: An isolated occult geek cursed by a turbo-granny specter, giving him a high-speed demonic shifting form."
+    ],
+    "aliases": [
+      "Okarun",
+      "Ken Takakura"
+    ]
+  },
+  {
+    "name": "Maomao",
+    "image": "https://upload.wikimedia.org/wikipedia/en/3/3a/The_Apothecary_Diaries_volume_1_light_novel_cover.jpg",
+    "hints": [
+      "From: Manga (The Apothecary Diaries)",
+      "About: An un-enthusiastic palace maid with deep herbal knowledge who solves internal imperial poisoning plots."
+    ],
+    "aliases": [
+      "Maomao"
+    ]
+  },
+  {
+    "name": "Frieren",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a9/Frieren_Beyond_Journey%27s_End_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Frieren: Beyond Journey's End)",
+      "About: An ancient elven mage traveling a peaceful realm to understand the brief nature of human connections."
+    ],
+    "aliases": [
+      "Frieren"
+    ]
+  },
+  {
+    "name": "Himmel",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a9/Frieren_Beyond_Journey%27s_End_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Frieren: Beyond Journey's End)",
+      "About: A narcissistic but incredibly kind legendary hero whose legacy shapes an entire continent after his passing."
+    ],
+    "aliases": [
+      "Himmel"
+    ]
+  },
+  {
+    "name": "Sakamoto Taro",
+    "image": "https://upload.wikimedia.org/wikipedia/en/2/23/Sakamoto_Days_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Sakamoto Days)",
+      "About: A chubby, retired legendary contract hitman who protects his neighborhood store without killing anyone."
+    ],
+    "aliases": [
+      "Sakamoto"
+    ]
+  },
+  {
+    "name": "Nagumo",
+    "image": "https://upload.wikimedia.org/wikipedia/en/2/23/Sakamoto_Days_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Sakamoto Days)",
+      "About: A playful, tattoo-covered elite executioner who uses a giant multi-tool Swiss Army machete."
+    ],
+    "aliases": [
+      "Nagumo"
+    ]
+  },
+  {
+    "name": "Mash Burnedead",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/e2/Mashle_Magic_and_Muscles_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Mashle)",
+      "About: A magicless, cream-puff obsessed youth who smashes through elite wizard school trials using raw muscle force."
+    ],
+    "aliases": [
+      "Mash"
+    ]
+  },
+  {
+    "name": "Loid Forger",
+    "image": "https://upload.wikimedia.org/wikipedia/en/1/12/Spy_%C3%97_Family_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Spy x Family)",
+      "About: An elite codenamed agent who forms a mock family structure to keep tabs on isolationist political targets."
+    ],
+    "aliases": [
+      "Loid",
+      "Twilight"
+    ]
+  },
+  {
+    "name": "Anya Forger",
+    "image": "https://upload.wikimedia.org/wikipedia/en/1/12/Spy_%C3%97_Family_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Spy x Family)",
+      "About: A peanuts-loving little girl with secret mind-reading capabilities who tries to keep her mock home together."
+    ],
+    "aliases": [
+      "Anya"
+    ]
+  },
+  {
+    "name": "Yor Forger",
+    "image": "https://upload.wikimedia.org/wikipedia/en/1/12/Spy_%C3%97_Family_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Spy x Family)",
+      "About: A clumsy, sweet city clerk who secretively operates as a deadly assassin known as the Thorn Princess."
+    ],
+    "aliases": [
+      "Yor",
+      "Thorn Princess"
+    ]
+  },
+  {
+    "name": "Baki Hanma",
+    "image": "https://upload.wikimedia.org/wikipedia/en/c/ca/Grappler_Baki_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Baki the Grappler)",
+      "About: A teenage martial arts champion pushing his body to the limit to defeat his father, the strongest creature on earth."
+    ],
+    "aliases": [
+      "Baki"
+    ]
+  },
+  {
+    "name": "Ohma Tokita",
+    "image": "https://upload.wikimedia.org/wikipedia/en/5/52/Kengan_Ashura_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Kengan Ashura)",
+      "About: A fierce underground gladiator fighting in corporate proxy deathmatches using the secretive Niko style."
+    ],
+    "aliases": [
+      "Ohma",
+      "Ashura"
+    ]
+  },
+  {
+    "name": "Tsunayoshi Sawada",
+    "image": "https://upload.wikimedia.org/wikipedia/en/2/23/Reborn%21_vol_1.jpg",
+    "hints": [
+      "From: Manga (Katekyo Hitman Reborn!)",
+      "About: A cowardly student trained by a gun-toting infant tutor to become the next supreme boss of an Italian mafia line."
+    ],
+    "aliases": [
+      "Tsuna",
+      "Sawada"
+    ]
+  },
+  {
+    "name": "Yugi Mutou",
+    "image": "https://upload.wikimedia.org/wikipedia/en/1/16/Yu-Gi-Oh%21_Volume_1.jpg",
+    "hints": [
+      "From: Manga (Yu-Gi-Oh!)",
+      "About: A gentle game-loving boy who hosts the ancient pharaoh spirit of a master card gambler inside an artifact puzzle."
+    ],
+    "aliases": [
+      "Yugi"
+    ]
+  },
+  {
+    "name": "Seto Kaiba",
+    "image": "https://upload.wikimedia.org/wikipedia/en/1/16/Yu-Gi-Oh%21_Volume_1.jpg",
+    "hints": [
+      "From: Manga (Yu-Gi-Oh!)",
+      "About: An arrogant gaming tech CEO obsessed with destroying his rival using three Blue-Eyes White Dragons."
+    ],
+    "aliases": [
+      "Kaiba"
+    ]
+  },
+  {
+    "name": "Allen Walker",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/eb/DGray-man_volume_1.jpg",
+    "hints": [
+      "From: Manga (D.Gray-man)",
+      "About: A white-haired exorcist with a cursed eye and an anti-demon arm weapon that morphs into a sword."
+    ],
+    "aliases": [
+      "Allen"
+    ]
+  },
+  {
+    "name": "Toriko",
+    "image": "https://upload.wikimedia.org/wikipedia/en/4/4b/Toriko_vol_01_cover.jpg",
+    "hints": [
+      "From: Manga (Toriko)",
+      "About: A powerhouse gourmet hunter wandering a world of bizarre edible ingredients to complete his ultimate life menu."
+    ],
+    "aliases": [
+      "Toriko"
+    ]
+  },
+  {
+    "name": "Rin Okumura",
+    "image": "https://upload.wikimedia.org/wikipedia/en/3/30/Blue_Exorcist_vol_1.jpg",
+    "hints": [
+      "From: Manga (Blue Exorcist)",
+      "About: The son of Satan who manifests blue hellfire and decides to enroll in an institute to hunt down his demonic father."
+    ],
+    "aliases": [
+      "Rin"
+    ]
+  },
+  {
+    "name": "Asta",
+    "image": "https://upload.wikimedia.org/wikipedia/en/8/87/Black_Clover%2C_volume_1.jpg",
+    "hints": [
+      "From: Manga (Black Clover)",
+      "About: A loud, magicless orphan who fights using a five-leaf grimoire housing anti-magic nullifying greatswords."
+    ],
+    "aliases": [
+      "Asta"
+    ]
+  },
+  {
+    "name": "Yami Sukehiro",
+    "image": "https://upload.wikimedia.org/wikipedia/en/8/87/Black_Clover%2C_volume_1.jpg",
+    "hints": [
+      "From: Manga (Black Clover)",
+      "About: A foreign, chain-smoking magic knight captain who constantly tells his squad to surpass their limits right now."
+    ],
+    "aliases": [
+      "Yami"
+    ]
+  },
+  {
+    "name": "Senku Ishigami",
+    "image": "https://upload.wikimedia.org/wikipedia/en/2/24/Dr._Stone_volume_1_cover.jpg",
+    "hints": [
+      "From: Manga (Dr. STONE)",
+      "About: A brilliant high school scientist awakened thousands of years after a global petrifaction event to reboot civilization."
+    ],
+    "aliases": [
+      "Senku"
+    ]
+  },
+  {
+    "name": "Clare",
+    "image": "https://upload.wikimedia.org/wikipedia/en/0/07/Claymore_v01.jpg",
+    "hints": [
+      "From: Manga (Claymore)",
+      "About: A silver-eyed mutant monster-slayer traveling a dark medieval country hunting shapeshifters."
+    ],
+    "aliases": [
+      "Clare"
+    ]
+  }
+]

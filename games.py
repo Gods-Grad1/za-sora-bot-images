@@ -1,0 +1,1614 @@
+import os
+import re
+import time
+import random
+import json
+import datetime
+import threading
+from io import BytesIO
+from difflib import SequenceMatcher
+import requests
+import config
+import database
+
+# ---------------------------------------------------------------------------
+# AUTO-DELETE HELPERS
+# ---------------------------------------------------------------------------
+
+def send_and_delete(bot, chat_id, text, parse_mode="Markdown", reply_markup=None, delay=config.AUTO_DELETE_DELAY):
+    """Sends a message and schedules it for deletion."""
+    msg = bot.send_message(chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup)
+    def delete():
+        try:
+            bot.delete_message(chat_id, msg.message_id)
+        except Exception:
+            pass
+    timer = threading.Timer(delay, delete)
+    timer.daemon = True
+    timer.start()
+    return msg
+
+def send_photo_and_delete(bot, chat_id, photo, caption="", reply_markup=None, parse_mode="Markdown", delay=config.AUTO_DELETE_DELAY):
+    """Sends a photo and schedules it for deletion."""
+    msg = bot.send_photo(chat_id, photo, caption=caption, reply_markup=reply_markup, parse_mode=parse_mode)
+    def delete():
+        try:
+            bot.delete_message(chat_id, msg.message_id)
+        except Exception:
+            pass
+    timer = threading.Timer(delay, delete)
+    timer.daemon = True
+    timer.start()
+    return msg
+
+# ---------------------------------------------------------------------------
+# IMAGE SYSTEM
+# ---------------------------------------------------------------------------
+
+IMAGE_CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "game_image_cache")
+LOCAL_CHAR_DIR  = config.LOCAL_CHAR_IMAGES_DIR
+LOCAL_MEDIA_DIR = config.LOCAL_MEDIA_IMAGES_DIR
+SUPPORTED_EXTS  = [".jpg", ".jpeg", ".png", ".webp"]
+
+_IMG_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Referer":    "https://www.themoviedb.org/"
+}
+
+def _ensure_dirs():
+    for d in [IMAGE_CACHE_DIR, LOCAL_CHAR_DIR, LOCAL_MEDIA_DIR]:
+        os.makedirs(d, exist_ok=True)
+
+def _name_to_filename(name):
+    return re.sub(r'[^a-zA-Z0-9._-]', '_', name).strip('_')
+
+def _find_local_image(name, folder):
+    base = _name_to_filename(name)
+    for ext in SUPPORTED_EXTS:
+        path = os.path.join(folder, base + ext)
+        if os.path.exists(path):
+            return path
+    return None
+
+def _url_to_cache_filename(url):
+    safe = re.sub(r'[^a-zA-Z0-9._-]', '_', url)
+    return safe[-180:]
+
+def _get_cached_url_path(url):
+    return os.path.join(IMAGE_CACHE_DIR, _url_to_cache_filename(url))
+
+def _download_image(url, retries=3):
+    for attempt in range(1, retries + 1):
+        try:
+            r = requests.get(url, headers=_IMG_HEADERS, timeout=15, proxies={})  # proxy fix
+            if r.status_code == 429:
+                wait = int(r.headers.get("Retry-After", 10 * attempt))
+                time.sleep(wait)
+                continue
+            if r.status_code == 404:
+                return None
+            r.raise_for_status()
+            return r.content
+        except requests.exceptions.HTTPError:
+            return None
+        except Exception as e:
+            if attempt < retries:
+                time.sleep(3 * attempt)
+    return None
+
+def get_image_bytes(bot, name, folder, url):
+    _ensure_dirs()
+    # 1. Local file first
+    local = _find_local_image(name, folder)
+    if local:
+        with open(local, "rb") as f:
+            bio = BytesIO(f.read())
+        bio.name = "image.jpg"
+        bio.seek(0)
+        return bio
+
+    # 2. GitHub fallback
+    safe_name = _name_to_filename(name)
+    if folder == config.LOCAL_CHAR_IMAGES_DIR:
+        remote_folder = "characters"
+    elif folder == config.LOCAL_MEDIA_IMAGES_DIR:
+        remote_folder = "media"
+    else:
+        remote_folder = folder
+    github_url = f"{config.GITHUB_RAW_BASE_URL}{remote_folder}/{safe_name}.jpg"
+    data = _download_image(github_url)
+    if data:
+        local_path = os.path.join(folder, f"{safe_name}.jpg")
+        try:
+            with open(local_path, "wb") as f:
+                f.write(data)
+        except Exception:
+            pass
+        bio = BytesIO(data)
+        bio.name = "image.jpg"
+        bio.seek(0)
+        return bio
+
+    # 3. URL cache
+    if url:
+        cache_path = _get_cached_url_path(url)
+        if os.path.exists(cache_path):
+            with open(cache_path, "rb") as f:
+                bio = BytesIO(f.read())
+            bio.name = "image.jpg"
+            bio.seek(0)
+            return bio
+        data = _download_image(url)
+        if data:
+            with open(cache_path, "wb") as f:
+                f.write(data)
+            bio = BytesIO(data)
+            bio.name = "image.jpg"
+            bio.seek(0)
+            return bio
+
+    # 4. Total failure – notify admin
+    try:
+        bot.send_message(config.ADMIN_ID,
+            f"❌ *Image unavailable:* `{name}` — sending text only.",
+            parse_mode="Markdown")
+    except Exception:
+        pass
+    return None
+
+# ---------------------------------------------------------------------------
+# PRECACHE
+# ---------------------------------------------------------------------------
+
+def load_json_file(file_path):
+    if not os.path.exists(file_path):
+        print(f"⚠️ File not found: {file_path}")
+        return []
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"🛑 JSON error in {file_path}: {e}")
+        return None
+    except Exception as e:
+        print(f"💥 Error loading {file_path}: {e}")
+        return []
+
+def _load_all(db_list):
+    result = []
+    for path in db_list:
+        data = load_json_file(path)
+        if data:
+            result.extend(data)
+    return result
+
+def _precache_all_images(bot):
+    _ensure_dirs()
+    print("⚡ [IMG CACHE] Starting pre-cache...")
+    all_dbs = config.MEDIA_ALL_DBS + config.CHAR_ALL_DBS
+    total = skipped = failed = 0
+    for db_path in all_dbs:
+        entries = load_json_file(db_path) or []
+        for entry in entries:
+            url = (entry.get('image') or entry.get('image_url') or
+                   entry.get('img') or entry.get('poster'))
+            if not url:
+                continue
+            path = _get_cached_url_path(url)
+            if os.path.exists(path):
+                skipped += 1
+                continue
+            data = _download_image(url)
+            if data:
+                with open(path, "wb") as f:
+                    f.write(data)
+                total += 1
+                time.sleep(0.3)
+            else:
+                failed += 1
+    print(f"✅ [IMG CACHE] Done — downloaded:{total} cached:{skipped} failed:{failed}")
+
+def precache_assets(bot):
+    threading.Thread(target=_precache_all_images, args=(bot,), daemon=True).start()
+
+# ---------------------------------------------------------------------------
+# ACTIVE GAME STATE
+# ---------------------------------------------------------------------------
+
+active_games = {}          # chat_id -> session
+versus_games = {}          # chat_id -> versus session
+last_game_type = {}        # chat_id -> "character" | "year" | "trivia" | "picture"
+last_game_category = {}    # chat_id -> category name (or "random")
+pending_admin_actions = {} # chat_id -> {'type': ..., 'category': ...}
+
+def _get_time_limit():
+    try:
+        sched = database.load_json(config.SCHEDULER_FILE, {})
+        return int(sched.get("answer_time_limit", config.DEFAULT_ANSWER_TIME))
+    except Exception:
+        return config.DEFAULT_ANSWER_TIME
+
+def _is_game_active(chat_id):
+    return chat_id in active_games
+
+def _check_one_game_lock(bot, chat_id, user_id, game_type=None, category=None):
+    """Returns True if a game (or versus) is active and should block.
+       For admin, stores pending action and asks for confirmation."""
+    # Check if user is muted
+    if database.is_muted(chat_id, user_id):
+        bot.send_message(chat_id, "🔇 You are muted! Wait until your mute expires.")
+        return True
+
+    if not _is_game_active(chat_id) and chat_id not in versus_games:
+        return False  # No active game, proceed
+
+    if user_id == config.ADMIN_ID:
+        # Admin wants to start, but game is active -> store pending action and ask
+        pending_admin_actions[chat_id] = {'type': game_type, 'category': category}
+        import telebot
+        markup = telebot.types.InlineKeyboardMarkup()
+        markup.row(
+            telebot.types.InlineKeyboardButton("✅ Yes, stop & start", callback_data="admin_force_start"),
+            telebot.types.InlineKeyboardButton("❌ Cancel", callback_data="admin_cancel_start"),
+        )
+        bot.send_message(chat_id,
+                         "⚠️ A game is already in progress. Do you want to stop it and start a new one?",
+                         reply_markup=markup, parse_mode="Markdown")
+        return True  # Block immediate start
+
+    # Non-admin: if a versus is active, send specific message
+    if chat_id in versus_games:
+        bot.send_message(chat_id, "⚠️ A versus match is currently in progress. Please wait until it finishes.")
+        return True
+
+    # Otherwise, generic active game message
+    bot.send_message(chat_id, "⚠️ A game is already in progress! Answer it, use /stop to cancel, or wait for the timer.")
+    return True
+
+# ---------------------------------------------------------------------------
+# SEND HELPERS
+# ---------------------------------------------------------------------------
+
+def _game_markup(chat_id, game_type):
+    import telebot
+    markup = telebot.types.InlineKeyboardMarkup()
+    markup.row(
+        telebot.types.InlineKeyboardButton("💡 Hint",  callback_data=f"hint_{chat_id}"),
+        telebot.types.InlineKeyboardButton("⏭️ Next",  callback_data=f"nextgame_{chat_id}_{game_type}"),
+        telebot.types.InlineKeyboardButton("🛑 Stop",  callback_data=f"stopgame_{chat_id}"),
+    )
+    return markup
+
+def _send_game_message(bot, chat_id, text, name, folder, url, markup=None):
+    img_data = get_image_bytes(bot, name, folder, url)
+    kwargs   = {"parse_mode": "Markdown"}
+    if markup:
+        kwargs["reply_markup"] = markup
+    if img_data:
+        try:
+            if len(text) <= 1024:
+                send_photo_and_delete(bot, chat_id, img_data, caption=text, **kwargs)
+            else:
+                send_photo_and_delete(bot, chat_id, img_data)
+                send_and_delete(bot, chat_id, text, **kwargs)
+            return
+        except Exception as e:
+            print(f"⚠️ Photo send failed: {e}")
+    send_and_delete(bot, chat_id, text, **kwargs)
+
+# ---------------------------------------------------------------------------
+# CATEGORY PICKER MENUS
+# ---------------------------------------------------------------------------
+
+def send_character_category_picker(bot, chat_id):
+    import telebot
+    markup = telebot.types.InlineKeyboardMarkup(row_width=2)
+    markup.add(
+        telebot.types.InlineKeyboardButton("🌸 Anime",   callback_data="charcat_anime"),
+        telebot.types.InlineKeyboardButton("🦸 DC",      callback_data="charcat_dc"),
+        telebot.types.InlineKeyboardButton("⚡ Marvel",  callback_data="charcat_marvel"),
+        telebot.types.InlineKeyboardButton("🎮 Gaming",  callback_data="charcat_gaming"),
+        telebot.types.InlineKeyboardButton("🎲 Random",  callback_data="charcat_random"),
+    )
+    send_and_delete(bot, chat_id, "👤 *GUESS THE CHARACTER*\n\nChoose a category:",
+                     reply_markup=markup, parse_mode="Markdown")
+
+def send_year_category_picker(bot, chat_id):
+    import telebot
+    markup = telebot.types.InlineKeyboardMarkup(row_width=2)
+    markup.add(
+        telebot.types.InlineKeyboardButton("🎬 Movies",       callback_data="yearcat_movies"),
+        telebot.types.InlineKeyboardButton("📺 Anime Series", callback_data="yearcat_anime_series"),
+        telebot.types.InlineKeyboardButton("🎥 Anime Films",  callback_data="yearcat_anime_films"),
+        telebot.types.InlineKeyboardButton("🎨 Animation",    callback_data="yearcat_animation"),
+        telebot.types.InlineKeyboardButton("🎲 Random",       callback_data="yearcat_random"),
+    )
+    send_and_delete(bot, chat_id, "🎬 *GUESS THE YEAR*\n\nChoose a category:",
+                     reply_markup=markup, parse_mode="Markdown")
+
+def send_trivia_category_picker(bot, chat_id):
+    import telebot
+    markup = telebot.types.InlineKeyboardMarkup(row_width=2)
+    icons  = ["🎮","👤","🎬","🌍","🍕","⚽","💻","📖"]
+    markup.add(*[
+        telebot.types.InlineKeyboardButton(f"{icon} {cat}",
+            callback_data=f"triviacat_{cat.lower()}")
+        for icon, cat in zip(icons, config.TRIVIA_CATEGORIES)
+    ])
+    markup.add(telebot.types.InlineKeyboardButton("🎲 Random", callback_data="triviacat_random"))
+    send_and_delete(bot, chat_id, "❓ *TRIVIA*\n\nChoose a category:",
+                     reply_markup=markup, parse_mode="Markdown")
+
+# ---------------------------------------------------------------------------
+# HINT SYSTEM
+# ---------------------------------------------------------------------------
+
+def _get_hint(session, hint_num):
+    game_type = session.get("type")
+    if game_type in ("character", "picture"):
+        hints_list = session.get("hints_list", [])
+        if hint_num == 1:
+            return f"💡 *Hint 1:* {hints_list[0]}" if hints_list else "💡 *Hint 1:* No extra hints available."
+        elif hint_num == 2:
+            return f"💡 *Hint 2:* The name starts with *{session['answer'][0].upper()}*"
+        elif hint_num == 3:
+            return f"💡 *Hint 3:* Category — *{session.get('category', 'Unknown')}*"
+    elif game_type == "year":
+        year = int(session["answer"])
+        if hint_num == 1:
+            return f"💡 *Hint 1:* Released in the *{(year//10)*10}s*"
+        elif hint_num == 2:
+            return f"💡 *Hint 2:* Between *{year-3}* and *{year+3}*"
+        elif hint_num == 3:
+            return f"💡 *Hint 3:* Type — *{session.get('media_type','Unknown')}*"
+    return "💡 No more hints available."
+
+def process_hint(bot, message=None, call=None):
+    if call:
+        chat_id  = call.message.chat.id
+        user_id  = call.from_user.id
+        username = call.from_user.username or call.from_user.first_name
+        def reply(t): send_and_delete(bot, chat_id, t, parse_mode="Markdown")
+    else:
+        chat_id  = message.chat.id
+        user_id  = message.from_user.id
+        username = message.from_user.username or message.from_user.first_name
+        def reply(t): bot.reply_to(message, t, parse_mode="Markdown")
+
+    # Check if muted
+    if database.is_muted(chat_id, user_id):
+        reply("🔇 You are muted! Wait until your mute expires.")
+        return
+
+    if chat_id not in active_games:
+        reply("❌ No active game to hint.")
+        return
+
+    session    = active_games[chat_id]
+    hints_used = session.get("hints_used", 0)
+
+    if hints_used >= config.POINTS_HINT_MAX:
+        reply(f"❌ Maximum {config.POINTS_HINT_MAX} hints already used this round.")
+        return
+
+    has_token = database.use_hint_token(bot, chat_id, user_id, username)
+    if not has_token:
+        data        = database.load_json(config.GROUP_DATA_FILE, {})
+        current_pts = data.get(str(chat_id), {}).get(str(user_id), {}).get("points", 0)
+        if current_pts < config.POINTS_HINT_PENALTY:
+            reply(f"❌ Not enough points for a hint. You have *{current_pts}* pts but need *{config.POINTS_HINT_PENALTY}* pts.")
+            return
+        database.deduct_points(bot, chat_id, user_id, username, config.POINTS_HINT_PENALTY)
+
+    session["hints_used"] = hints_used + 1
+    hint_text  = _get_hint(session, session["hints_used"])
+    cost_note  = "*(Used hint token ✅)*" if has_token else f"*(-{config.POINTS_HINT_PENALTY} pts)*"
+    reply(f"{hint_text}\n{cost_note}")
+
+# ---------------------------------------------------------------------------
+# CHARACTER GAME
+# ---------------------------------------------------------------------------
+
+def is_character_match(guess, answer, aliases=None):
+    """Check if guess matches the character name or any alias with lenient rules."""
+    guess = guess.lower().strip()
+    answer = answer.lower().strip()
+    # 1. Exact match
+    if guess == answer:
+        return True
+    # 2. Substring match
+    if guess in answer or answer in guess:
+        return True
+    # 3. Word match (any word in guess matches any word in answer)
+    guess_words = set(guess.split())
+    answer_words = set(answer.split())
+    if guess_words & answer_words:
+        return True
+    # 4. Fuzzy match (85% similarity)
+    if SequenceMatcher(None, guess, answer).ratio() >= 0.85:
+        return True
+    # 5. Aliases
+    if aliases:
+        for alias in aliases:
+            alias_lower = alias.lower()
+            if guess == alias_lower:
+                return True
+            if guess in alias_lower or alias_lower in guess:
+                return True
+            if set(guess.split()) & set(alias_lower.split()):
+                return True
+            if SequenceMatcher(None, guess, alias_lower).ratio() >= 0.85:
+                return True
+    return False
+
+def start_character_game(bot, chat_id, category=None, user_id=None):
+    if user_id and _check_one_game_lock(bot, chat_id, user_id, game_type="character", category=category):
+        return None
+
+    db_path    = config.CHAR_CATEGORIES.get((category or "random").lower())
+    characters = load_json_file(db_path) if db_path and category != "random" else _load_all(config.CHAR_ALL_DBS)
+
+    if not characters:
+        send_and_delete(bot, chat_id, "⚠️ No characters found.")
+        return None
+
+    q       = random.choice(characters)
+    name    = str(q.get('name', 'Unknown')).strip()
+    hints   = q.get('hints') or q.get('hint', 'No hints available.')
+    img_url = q.get('image') or q.get('image_url') or q.get('img')
+    hints_list = hints if isinstance(hints, list) else [hints]
+    aliases = q.get('aliases', [])
+    cat_label  = category.title() if category and category != "random" else "Character"
+
+    active_games[chat_id] = {
+        "type":       "character",
+        "answer":     name.lower(),
+        "display":    name,
+        "hints_list": hints_list,
+        "category":   cat_label,
+        "hints_used": 0,
+        "img_url":    img_url,
+        "aliases":    [a.lower() for a in aliases],
+    }
+
+    # Store last game info for "Next" button
+    last_game_type[chat_id] = "character"
+    last_game_category[chat_id] = category if category else "random"
+
+    time_limit = _get_time_limit()
+    text = f"👤 *GUESS THE CHARACTER* 👤\n\n"
+    if isinstance(hints, list):
+        for i, h in enumerate(hints, 1):
+            text += f"🔍 *HINT {i}:* {h}\n"
+    else:
+        text += f"🔍 *HINT:* {hints}\n"
+    text += f"\n⏱️ *{time_limit}s to answer!*  💡 /hint for a clue (-{config.POINTS_HINT_PENALTY} pts)"
+
+    markup = _game_markup(chat_id, "character")
+    _send_game_message(bot, chat_id, text, name, LOCAL_CHAR_DIR, img_url, markup)
+
+    _start_timer(bot, chat_id, time_limit)
+    return q
+
+# ---------------------------------------------------------------------------
+# YEAR GAME (Multiple Choice)
+# ---------------------------------------------------------------------------
+
+def start_year_game(bot, chat_id, category=None, user_id=None):
+    if user_id and _check_one_game_lock(bot, chat_id, user_id, game_type="year", category=category):
+        return None
+
+    db_path = config.YEAR_CATEGORIES.get((category or "random").lower())
+    items   = load_json_file(db_path) if db_path and category != "random" else _load_all(config.MEDIA_ALL_DBS)
+
+    if not items:
+        send_and_delete(bot, chat_id, "⚠️ No media found.")
+        return None
+
+    q          = random.choice(items)
+    title      = q.get('title', 'Unknown Title')
+    media_type = q.get('type', 'Media')
+    year       = str(q.get('year', '????')).strip()
+    img_url    = q.get('image') or q.get('image_url') or q.get('img') or q.get('poster')
+    cat_label  = category.replace("_", " ").title() if category and category != "random" else media_type
+
+    # Generate 4 options: correct year + 3 distractors
+    all_years = [item.get('year') for item in items if item.get('year') and item.get('year') != year]
+    random.shuffle(all_years)
+    distractors = all_years[:3]
+    options = [year] + distractors
+    random.shuffle(options)
+    correct_index = options.index(year)
+
+    # Store session
+    active_games[chat_id] = {
+        "type":          "year",
+        "answer":        year,
+        "display":       f"{title} ({year})",
+        "media_type":    cat_label,
+        "hints_used":    0,
+        "img_url":       img_url,
+        "options":       options,
+        "correct_index": correct_index,
+        "title":         title,
+        "answered":      set(),  # track who answered already
+    }
+
+    # Store last game info for "Next" button
+    last_game_type[chat_id] = "year"
+    last_game_category[chat_id] = category if category else "random"
+
+    import telebot
+    markup = telebot.types.InlineKeyboardMarkup(row_width=2)
+    letters = ["A", "B", "C", "D"]
+    for i, opt in enumerate(options):
+        markup.add(telebot.types.InlineKeyboardButton(
+            f"{letters[i]}. {opt}", callback_data=f"year_ans_{chat_id}_{i}"
+        ))
+    markup.row(
+        telebot.types.InlineKeyboardButton("⏭️ Next",  callback_data=f"nextgame_{chat_id}_year"),
+        telebot.types.InlineKeyboardButton("🛑 Stop",  callback_data=f"stopgame_{chat_id}"),
+    )
+
+    time_limit = _get_time_limit()
+    text = (
+        f"🎬 *GUESS THE RELEASE YEAR* 🎬\n\n"
+        f"🍿 *Title:* {title}\n"
+        f"🏷️ *Type:* {cat_label}\n\n"
+        f"Tap the correct year below!\n"
+        f"⏱️ *{time_limit}s to answer!*"
+    )
+
+    _send_game_message(bot, chat_id, text, title, LOCAL_MEDIA_DIR, img_url, markup)
+    _start_timer(bot, chat_id, time_limit)
+    return q
+
+def handle_year_answer(bot, call):
+    parts = call.data.split("_")
+    chat_id = int(parts[2])
+    chosen_index = int(parts[3])
+
+    if chat_id not in active_games or active_games[chat_id].get("type") != "year":
+        bot.answer_callback_query(call.id, "No active year round.")
+        return
+
+    session = active_games[chat_id]
+    user_id = call.from_user.id
+    username = call.from_user.username or call.from_user.first_name
+
+    if user_id in session.get("answered", set()):
+        bot.answer_callback_query(call.id, "❌ You already answered this round!", show_alert=True)
+        return
+
+    session.setdefault("answered", set()).add(user_id)
+
+    if chosen_index == session["correct_index"]:
+        pts, streak, mult, final = database.reward_user(
+            bot, chat_id, user_id, username, config.POINTS_YEAR_GAME)
+        streak_txt = f" 🔥 Streak x{int(mult)}!" if streak > 1 else ""
+        bot.answer_callback_query(call.id, f"✅ CORRECT! +{final} pts{streak_txt}", show_alert=True)
+
+        import telebot
+        markup = telebot.types.InlineKeyboardMarkup()
+        markup.row(telebot.types.InlineKeyboardButton(
+            "⏭️ Next Game", callback_data=f"nextgame_{chat_id}_year"
+        ))
+        send_and_delete(
+            bot,
+            chat_id,
+            f"🎉 *{username}* got it!\n"
+            f"Answer: *{session['answer']}* for *{session['title']}*\n"
+            f"+{final} pts{streak_txt}",
+            reply_markup=markup, parse_mode="Markdown"
+        )
+        # Delete session after correct answer
+        del active_games[chat_id]
+    else:
+        database.penalise_wrong(bot, chat_id, user_id, username)
+        bot.answer_callback_query(call.id, "❌ Wrong! Streak broken.", show_alert=True)
+
+# ---------------------------------------------------------------------------
+# PICTURE GUESSING GAME
+# ---------------------------------------------------------------------------
+
+def start_picture_game(bot, chat_id, category=None, user_id=None):
+    """Starts a picture guessing game – shows a scrambled image."""
+    if user_id and _check_one_game_lock(bot, chat_id, user_id, game_type="picture", category=category):
+        return None
+
+    db_path = config.CHAR_CATEGORIES.get((category or "random").lower())
+    if not db_path:
+        db_path = config.CHAR_ANIME_DB
+    items = load_json_file(db_path) if db_path and category != "random" else _load_all(config.CHAR_ALL_DBS)
+    if not items:
+        send_and_delete(bot, chat_id, "⚠️ No items found.")
+        return None
+    q = random.choice(items)
+    name = str(q.get('name', 'Unknown')).strip()
+    img_url = q.get('image') or q.get('image_url') or q.get('img')
+    cat_label = category.title() if category and category != "random" else "Character"
+    hints = q.get('hints') or q.get('hint', 'No hints available.')
+    hints_list = hints if isinstance(hints, list) else [hints]
+
+    # Get the image and scramble it
+    img_data = get_image_bytes(bot, name, LOCAL_CHAR_DIR, img_url)
+    if not img_data:
+        send_and_delete(bot, chat_id, "❌ Could not load image for this character.")
+        return None
+
+    # Scramble: pixelate (downscale then upscale)
+    from PIL import Image
+    img = Image.open(img_data)
+    w, h = img.size
+    small = img.resize((w//8, h//8), Image.Resampling.NEAREST)
+    scrambled = small.resize((w, h), Image.Resampling.NEAREST)
+    bio = BytesIO()
+    scrambled.save(bio, 'PNG')
+    bio.seek(0)
+    bio.name = "scrambled.png"
+
+    active_games[chat_id] = {
+        "type": "picture",
+        "answer": name.lower(),
+        "display": name,
+        "category": cat_label,
+        "hints_used": 0,
+        "img_url": img_url,
+        "hints_list": hints_list,
+    }
+
+    # Store last game info for "Next" button
+    last_game_type[chat_id] = "picture"
+    last_game_category[chat_id] = category if category else "random"
+
+    time_limit = _get_time_limit()
+    text = f"🖼️ *GUESS THE CHARACTER* (Scrambled Image)\n\n"
+    text += f"Category: *{cat_label}*\n\n"
+    text += f"⏱️ *{time_limit}s to answer!*  💡 /hint for a clue"
+
+    markup = _game_markup(chat_id, "picture")
+    send_photo_and_delete(bot, chat_id, bio, caption=text, reply_markup=markup, parse_mode="Markdown")
+    _start_timer(bot, chat_id, time_limit)
+    return q
+
+# ---------------------------------------------------------------------------
+# TIMER
+# ---------------------------------------------------------------------------
+
+def _start_timer(bot, chat_id, seconds):
+    session_snapshot = active_games.get(chat_id, {}).copy()
+    def timeout():
+        time.sleep(seconds)
+        if chat_id in active_games and active_games[chat_id].get("answer") == session_snapshot.get("answer"):
+            # If it's a year game, we may have a session; delete it and show timeout
+            if active_games[chat_id].get("type") == "year":
+                correct = active_games[chat_id].get("answer")
+                title = active_games[chat_id].get("title", "")
+                send_and_delete(
+                    bot,
+                    chat_id,
+                    f"⏰ *Time's up!*\nThe correct year was: *{correct}* for *{title}*",
+                    parse_mode="Markdown"
+                )
+            elif active_games[chat_id].get("type") in ("character", "picture"):
+                # Reveal the answer
+                answer = active_games[chat_id].get("display", "Unknown")
+                send_and_delete(
+                    bot,
+                    chat_id,
+                    f"⏰ *Time's up!*\nThe answer was: *{answer}*",
+                    parse_mode="Markdown"
+                )
+            del active_games[chat_id]
+            send_and_delete(
+                bot,
+                chat_id,
+                f"⏰ *Time's up!* No one got it this round.\n\n"
+                f"Start a new game with /game, /year or /trivia! 🎮",
+                parse_mode="Markdown"
+            )
+    threading.Thread(target=timeout, daemon=True).start()
+
+# ---------------------------------------------------------------------------
+# TRIVIA GAME
+# ---------------------------------------------------------------------------
+
+def start_trivia_game(bot, chat_id, category=None, user_id=None):
+    if user_id and _check_one_game_lock(bot, chat_id, user_id, game_type="trivia", category=category):
+        return None
+
+    trivia_data = load_json_file(config.TRIVIA_DB)
+    if not trivia_data:
+        send_and_delete(bot, chat_id, "⚠️ Trivia database not found.")
+        return None
+
+    pool = trivia_data
+    if category and category.lower() not in ("random", "all"):
+        pool = [q for q in trivia_data if q["category"].lower() == category.lower()]
+    if not pool:
+        send_and_delete(bot, chat_id, f"⚠️ No questions found for: {category}")
+        return None
+
+    q       = random.choice(pool)
+    options = q["options"]
+    answer  = q["answer"]
+
+    # Check for 50/50 powerup
+    fifty_fifty_used = False
+    if user_id:
+        if database.use_powerup(bot, chat_id, user_id, "fifty_fifty", username if username else "User"):
+            fifty_fifty_used = True
+            # Remove two wrong options
+            correct_option = options[ord(answer) - ord("A")]
+            wrong_options = [opt for opt in options if opt != correct_option]
+            random.shuffle(wrong_options)
+            # Keep only the correct and one wrong option
+            trimmed_options = [correct_option] + wrong_options[:1]
+            random.shuffle(trimmed_options)
+            # Update options and answer
+            options = trimmed_options
+            answer = chr(ord('A') + options.index(correct_option))
+            send_and_delete(bot, chat_id, "✂️ *50/50 activated!* Two wrong answers removed.", parse_mode="Markdown")
+
+    active_games[chat_id] = {
+        "type":     "trivia",
+        "answer":   answer,
+        "display":  options[ord(answer) - ord("A")],
+        "question": q["question"],
+        "options":  options,
+        "category": q["category"],
+        "answered": set(),
+        "hints_used": 0,
+        "fifty_fifty_used": fifty_fifty_used,
+    }
+
+    # Store last game info for "Next" button
+    last_game_type[chat_id] = "trivia"
+    last_game_category[chat_id] = category if category else "random"
+
+    import telebot
+    markup = telebot.types.InlineKeyboardMarkup(row_width=2)
+    letters = ["A", "B", "C", "D"]
+    markup.add(*[
+        telebot.types.InlineKeyboardButton(
+            f"{l}. {options[i]}", callback_data=f"trivia_{chat_id}_{l}"
+        ) for i, l in enumerate(letters) if i < len(options)
+    ])
+    markup.row(
+        telebot.types.InlineKeyboardButton("⏭️ Next",  callback_data=f"nextgame_{chat_id}_trivia"),
+        telebot.types.InlineKeyboardButton("🛑 Stop",  callback_data=f"stopgame_{chat_id}"),
+    )
+
+    time_limit = _get_time_limit()
+    text = (
+        f"❓ *TRIVIA — {q['category'].upper()}*\n\n"
+        f"*{q['question']}*\n\n"
+    )
+    for i, opt in enumerate(options):
+        text += f"{letters[i]}. {opt}\n"
+    text += f"\n🏆 First correct wins *{config.POINTS_TRIVIA} pts!*  ⏱️ {time_limit}s"
+
+    send_and_delete(bot, chat_id, text, reply_markup=markup, parse_mode="Markdown")
+
+    # Auto-reveal after time limit
+    session_snapshot = active_games[chat_id].copy()
+    def auto_reveal():
+        time.sleep(time_limit)
+        if chat_id in active_games and active_games[chat_id].get("answer") == session_snapshot.get("answer"):
+            # Show correct answer
+            send_and_delete(
+                bot,
+                chat_id,
+                f"⏰ *Time's up!*\nThe answer was: *{session_snapshot['answer']}. {session_snapshot['display']}*",
+                parse_mode="Markdown"
+            )
+            # Delete session
+            if chat_id in active_games:
+                del active_games[chat_id]
+    threading.Thread(target=auto_reveal, daemon=True).start()
+    return q
+
+def handle_trivia_answer(bot, call):
+    parts   = call.data.split("_")
+    chat_id = int(parts[1])
+    chosen  = parts[2]
+
+    if chat_id not in active_games or active_games[chat_id].get("type") != "trivia":
+        bot.answer_callback_query(call.id, "No active trivia round.")
+        return
+
+    session  = active_games[chat_id]
+    user_id  = call.from_user.id
+    username = call.from_user.username or call.from_user.first_name
+
+    if user_id in session["answered"]:
+        bot.answer_callback_query(call.id, "❌ You already answered this round!", show_alert=True)
+        return
+
+    session["answered"].add(user_id)
+
+    if chosen == session["answer"]:
+        pts, streak, mult, final = database.reward_user(
+            bot, chat_id, user_id, username, config.POINTS_TRIVIA)
+        streak_txt = f" 🔥 Streak x{int(mult)}!" if streak > 1 else ""
+
+        # Track trivia correct for achievements
+        data = database.load_json(config.GROUP_DATA_FILE, {})
+        chat_str = str(chat_id)
+        user_str = str(user_id)
+        u = database.get_user(data, chat_str, user_str, username)
+        u["trivia_correct"] = u.get("trivia_correct", 0) + 1
+        database.save_json(bot, config.GROUP_DATA_FILE, data)
+        database.check_achievements(bot, chat_id, user_id, username)
+
+        bot.answer_callback_query(call.id, f"✅ CORRECT! +{final} pts{streak_txt}", show_alert=True)
+
+        import telebot
+        markup = telebot.types.InlineKeyboardMarkup()
+        markup.row(
+            telebot.types.InlineKeyboardButton("⏭️ Next Game", callback_data=f"nextgame_{chat_id}_trivia"),
+        )
+        send_and_delete(
+            bot,
+            chat_id,
+            f"🎉 *{username}* got it!\n"
+            f"Answer: *{session['answer']}. {session['display']}*\n"
+            f"+{final} pts{streak_txt}",
+            reply_markup=markup, parse_mode="Markdown"
+        )
+        # Delete session
+        del active_games[chat_id]
+    else:
+        database.penalise_wrong(bot, chat_id, user_id, username)
+        bot.answer_callback_query(call.id, "❌ Wrong! Streak broken.", show_alert=True)
+
+# ---------------------------------------------------------------------------
+# NEXT GAME HANDLER
+# ---------------------------------------------------------------------------
+
+def handle_next_game(bot, call):
+    parts     = call.data.split("_")
+    chat_id   = int(parts[1])
+    game_type = parts[2]  # "character", "year", "trivia", or "picture"
+
+    # Clean up any existing session
+    if chat_id in active_games:
+        del active_games[chat_id]
+
+    bot.answer_callback_query(call.id)
+    send_and_delete(bot, chat_id, "⏭️ *Moving to the next round...*", parse_mode="Markdown")
+
+    # Get the stored category for this chat (default to "random")
+    cat = last_game_category.get(chat_id, "random")
+
+    # Start a fresh game of the same type with the same category
+    if game_type == "character":
+        start_character_game(bot, chat_id, category=cat)
+    elif game_type == "year":
+        start_year_game(bot, chat_id, category=cat)
+    elif game_type == "trivia":
+        start_trivia_game(bot, chat_id, category=cat)
+    elif game_type == "picture":
+        start_picture_game(bot, chat_id, category=cat)
+
+# ---------------------------------------------------------------------------
+# VERSUS MODE
+# ---------------------------------------------------------------------------
+
+WIN_TARGET = 2
+
+def start_versus(bot, chat_id, challenger_id, challenger_name, target_id, target_name):
+    import telebot
+    if chat_id in versus_games:
+        send_and_delete(bot, chat_id, "⚔️ A versus match is already in progress!")
+        return
+
+    # Check if either player is muted
+    if database.is_muted(chat_id, challenger_id):
+        send_and_delete(bot, chat_id, "🔇 You are muted! You cannot start a versus match.")
+        return
+    if database.is_muted(chat_id, target_id):
+        send_and_delete(bot, chat_id, "🔇 That user is muted! They cannot accept a versus match.")
+        return
+
+    versus_games[chat_id] = {
+        "state":             "pending",
+        "challenger_id":     challenger_id,
+        "challenger_name":   challenger_name,
+        "target_id":         target_id,
+        "target_name":       target_name,
+        "bets":              {},
+        "score":             {str(challenger_id): 0, str(target_id): 0},
+        "round":             0,
+        "consecutive_skips": 0,
+        "expires":           time.time() + config.VERSUS_ACCEPT_TIMEOUT,
+    }
+
+    markup = telebot.types.InlineKeyboardMarkup()
+    markup.row(
+        telebot.types.InlineKeyboardButton("✅ Accept Challenge",
+            callback_data=f"vs_accept_{chat_id}_{challenger_id}"),
+        telebot.types.InlineKeyboardButton("❌ Decline",
+            callback_data=f"vs_decline_{chat_id}"),
+    )
+    send_and_delete(bot, chat_id,
+        f"⚔️ *VERSUS CHALLENGE!*\n\n"
+        f"🥊 *{challenger_name}* has challenged *{target_name}* to a trivia duel!\n"
+        f"First to *{WIN_TARGET} points* wins!\n\n"
+        f"*{target_name}* — you have {config.VERSUS_ACCEPT_TIMEOUT}s to accept!",
+        reply_markup=markup, parse_mode="Markdown")
+
+    def expire():
+        time.sleep(config.VERSUS_ACCEPT_TIMEOUT + 1)
+        if chat_id in versus_games and versus_games[chat_id].get("state") == "pending":
+            del versus_games[chat_id]
+            send_and_delete(bot, chat_id,
+                f"⏰ Challenge expired — *{target_name}* didn't respond.",
+                parse_mode="Markdown")
+    threading.Thread(target=expire, daemon=True).start()
+
+def handle_versus_accept(bot, call):
+    import telebot
+    parts         = call.data.split("_")
+    chat_id       = int(parts[2])
+    challenger_id = int(parts[3])
+
+    if chat_id not in versus_games:
+        bot.answer_callback_query(call.id, "⏰ Challenge expired.", show_alert=True)
+        return
+
+    vs      = versus_games[chat_id]
+    user_id = call.from_user.id
+
+    if user_id != vs["target_id"]:
+        bot.answer_callback_query(call.id, "⚠️ This challenge isn't for you!", show_alert=True)
+        return
+
+    vs["state"] = "betting"
+    bot.answer_callback_query(call.id, "✅ Challenge accepted!")
+    try:
+        bot.edit_message_reply_markup(chat_id, call.message.message_id, reply_markup=None)
+    except Exception:
+        pass
+
+    c_name, t_name = vs["challenger_name"], vs["target_name"]
+    markup = telebot.types.InlineKeyboardMarkup(row_width=2)
+    markup.add(
+        telebot.types.InlineKeyboardButton(f"5pts → {c_name}",
+            callback_data=f"vsbet_{chat_id}_challenger_5"),
+        telebot.types.InlineKeyboardButton(f"5pts → {t_name}",
+            callback_data=f"vsbet_{chat_id}_target_5"),
+        telebot.types.InlineKeyboardButton(f"10pts → {c_name}",
+            callback_data=f"vsbet_{chat_id}_challenger_10"),
+        telebot.types.InlineKeyboardButton(f"10pts → {t_name}",
+            callback_data=f"vsbet_{chat_id}_target_10"),
+        telebot.types.InlineKeyboardButton(f"20pts → {c_name}",
+            callback_data=f"vsbet_{chat_id}_challenger_20"),
+        telebot.types.InlineKeyboardButton(f"20pts → {t_name}",
+            callback_data=f"vsbet_{chat_id}_target_20"),
+    )
+    send_and_delete(bot, chat_id,
+        f"✅ *Challenge Accepted!*\n\n"
+        f"⚔️ *{c_name}* vs *{t_name}*\n"
+        f"First to *{WIN_TARGET} points* wins — no round limit!\n\n"
+        f"👥 *Spectators — place your bets!*\n"
+        f"Bets lock before round 1. Max: *{config.VERSUS_MAX_BET} pts* | One per person\n"
+        f"⏳ Betting closes in *{config.VERSUS_BET_WINDOW}s*...",
+        reply_markup=markup, parse_mode="Markdown")
+
+    def launch():
+        time.sleep(config.VERSUS_BET_WINDOW)
+        if chat_id in versus_games and versus_games[chat_id].get("state") == "betting":
+            _countdown_then_round(bot, chat_id)
+    threading.Thread(target=launch, daemon=True).start()
+
+def handle_versus_bet(bot, call):
+    parts    = call.data.split("_")
+    chat_id  = int(parts[1])
+    pick     = parts[2]
+    amount   = int(parts[3])
+
+    if chat_id not in versus_games or versus_games[chat_id]["state"] != "betting":
+        bot.answer_callback_query(call.id, "⏰ Betting is closed.", show_alert=True)
+        return
+
+    vs       = versus_games[chat_id]
+    user_id  = call.from_user.id
+    username = call.from_user.username or call.from_user.first_name
+
+    if user_id in [vs["challenger_id"], vs["target_id"]]:
+        bot.answer_callback_query(call.id, "⚠️ Players can't bet on themselves!", show_alert=True)
+        return
+    if user_id in vs["bets"]:
+        existing  = vs["bets"][user_id]
+        pname     = vs["challenger_name"] if existing["pick"] == "challenger" else vs["target_name"]
+        bot.answer_callback_query(call.id,
+            f"⚠️ Already bet {existing['amount']} pts on {pname}!", show_alert=True)
+        return
+
+    pts_data = database.load_json(config.GROUP_DATA_FILE, {})
+    user_pts = pts_data.get(str(chat_id), {}).get(str(user_id), {}).get("points", 0)
+    if user_pts < amount:
+        bot.answer_callback_query(call.id,
+            f"❌ Not enough points! You have {user_pts} pts.", show_alert=True)
+        return
+
+    database.deduct_points(bot, chat_id, user_id, username, amount)
+    vs["bets"][user_id] = {"amount": amount, "pick": pick, "username": username}
+    pname = vs["challenger_name"] if pick == "challenger" else vs["target_name"]
+    bot.answer_callback_query(call.id, f"🎰 Bet {amount} pts on {pname}!", show_alert=True)
+
+def _score_display(vs):
+    c = vs["score"].get(str(vs["challenger_id"]), 0)
+    t = vs["score"].get(str(vs["target_id"]), 0)
+    return f"*{vs['challenger_name']}* {c} — {t} *{vs['target_name']}*"
+
+def _countdown_then_round(bot, chat_id):
+    if chat_id not in versus_games:
+        return
+    for emoji in ["3️⃣", "2️⃣", "1️⃣"]:
+        send_and_delete(bot, chat_id, emoji)
+        time.sleep(1)
+    _start_versus_round(bot, chat_id)
+
+def _start_versus_round(bot, chat_id):
+    import telebot
+    if chat_id not in versus_games:
+        return
+
+    vs           = versus_games[chat_id]
+    vs["state"]  = "active"
+    vs["round"] += 1
+    vs["answers"]      = {}
+    vs["round_closed"] = False
+
+    trivia_data = load_json_file(config.TRIVIA_DB) or []
+    if not trivia_data:
+        send_and_delete(bot, chat_id, "❌ Could not load trivia question.")
+        _end_versus_match(bot, chat_id, winner_id=None, reason="error")
+        return
+
+    q       = random.choice(trivia_data)
+    options = q["options"]
+    answer  = q["answer"]
+
+    vs["question_answer"]  = answer
+    vs["question_display"] = options[ord(answer) - ord("A")]
+
+    bet_summary = ""
+    if vs["round"] == 1 and vs["bets"]:
+        c_bets = sum(b["amount"] for b in vs["bets"].values() if b["pick"] == "challenger")
+        t_bets = sum(b["amount"] for b in vs["bets"].values() if b["pick"] == "target")
+        bet_summary = (
+            f"\n💰 *Bets:* {vs['challenger_name']}: {c_bets} pts"
+            f" | {vs['target_name']}: {t_bets} pts"
+        )
+
+    markup = telebot.types.InlineKeyboardMarkup(row_width=2)
+    markup.add(*[
+        telebot.types.InlineKeyboardButton(
+            f"{l}. {options[i]}", callback_data=f"vsans_{chat_id}_{l}"
+        )
+        for i, l in enumerate(["A","B","C","D"]) if i < len(options)
+    ])
+
+    send_and_delete(bot, chat_id,
+        f"⚔️ *ROUND {vs['round']}*\n"
+        f"{_score_display(vs)}\n\n"
+        f"*{q['question']}*\n\n"
+        f"A. {options[0]}\nB. {options[1]}\nC. {options[2]}\nD. {options[3]}\n\n"
+        f"⏱️ *Both players have {config.VERSUS_QUESTION_TIME}s to answer!*{bet_summary}",
+        reply_markup=markup, parse_mode="Markdown")
+
+    round_num = vs["round"]
+
+    def close_round():
+        time.sleep(config.VERSUS_QUESTION_TIME)
+        if (chat_id not in versus_games or
+                versus_games[chat_id].get("state") != "active" or
+                versus_games[chat_id].get("round") != round_num or
+                versus_games[chat_id].get("round_closed")):
+            return
+        _evaluate_round(bot, chat_id)
+
+    threading.Thread(target=close_round, daemon=True).start()
+
+def handle_versus_answer(bot, call):
+    parts   = call.data.split("_")
+    chat_id = int(parts[1])
+    chosen  = parts[2]
+
+    if chat_id not in versus_games or versus_games[chat_id].get("state") != "active":
+        bot.answer_callback_query(call.id, "⏰ No active versus round.", show_alert=True)
+        return
+
+    vs      = versus_games[chat_id]
+    user_id = call.from_user.id
+
+    if user_id not in [vs["challenger_id"], vs["target_id"]]:
+        bot.answer_callback_query(call.id, "👀 Spectators watch only!", show_alert=True)
+        return
+
+    if user_id in vs["answers"]:
+        bot.answer_callback_query(call.id, "⏳ Answer recorded! Waiting for opponent...",
+                                  show_alert=False)
+        return
+
+    vs["answers"][user_id] = {"chosen": chosen, "timestamp": time.time()}
+    bot.answer_callback_query(call.id, "✅ Answer recorded! Waiting for opponent...")
+
+    if (vs["challenger_id"] in vs["answers"] and
+            vs["target_id"] in vs["answers"]):
+        _evaluate_round(bot, chat_id)
+
+def _evaluate_round(bot, chat_id):
+    if chat_id not in versus_games:
+        return
+
+    vs = versus_games[chat_id]
+
+    if vs.get("round_closed"):
+        return
+    vs["round_closed"] = True
+    vs["state"]        = "between_rounds"
+
+    correct_answer = vs["question_answer"]
+    c_id           = vs["challenger_id"]
+    t_id           = vs["target_id"]
+    c_ans          = vs["answers"].get(c_id)
+    t_ans          = vs["answers"].get(t_id)
+
+    c_correct = c_ans and c_ans["chosen"] == correct_answer
+    t_correct = t_ans and t_ans["chosen"] == correct_answer
+
+    winner_id   = None
+    result_text = ""
+
+    if c_correct and t_correct:
+        if c_ans["timestamp"] <= t_ans["timestamp"]:
+            winner_id   = c_id
+            winner_name = vs["challenger_name"]
+            loser_name  = vs["target_name"]
+        else:
+            winner_id   = t_id
+            winner_name = vs["target_name"]
+            loser_name  = vs["challenger_name"]
+        result_text = (
+            f"✅ Both players got it right!\n"
+            f"⚡ *{winner_name}* was faster and wins the round!\n"
+            f"Better speed next time, *{loser_name}*!"
+        )
+    elif c_correct:
+        winner_id   = c_id
+        winner_name = vs["challenger_name"]
+        result_text = f"✅ *{winner_name}* got it right!"
+        if not t_ans:
+            result_text += f"\n⏰ *{vs['target_name']}* didn't answer in time."
+        else:
+            result_text += f"\n❌ *{vs['target_name']}* got it wrong."
+    elif t_correct:
+        winner_id   = t_id
+        winner_name = vs["target_name"]
+        result_text = f"✅ *{winner_name}* got it right!"
+        if not c_ans:
+            result_text += f"\n⏰ *{vs['challenger_name']}* didn't answer in time."
+        else:
+            result_text += f"\n❌ *{vs['challenger_name']}* got it wrong."
+    else:
+        if not c_ans and not t_ans:
+            vs["consecutive_skips"] = vs.get("consecutive_skips", 0) + 1
+            result_text = "⏰ Neither player answered in time! No point awarded."
+        else:
+            vs["consecutive_skips"] = 0
+            result_text = (
+                f"❌ Both players got it wrong! No point awarded.\n"
+                f"Correct answer: *{correct_answer}. {vs['question_display']}*"
+            )
+
+    if winner_id:
+        vs["score"][str(winner_id)] = vs["score"].get(str(winner_id), 0) + 1
+        vs["consecutive_skips"]     = 0
+        username = (vs["challenger_name"] if winner_id == c_id else vs["target_name"])
+        database.reward_user(bot, chat_id, winner_id, username,
+                             amount=config.POINTS_VERSUS_WIN // 3)
+
+        # Track versus wins for achievements
+        if winner_id:
+            data = database.load_json(config.GROUP_DATA_FILE, {})
+            chat_str = str(chat_id)
+            user_str = str(winner_id)
+            u = database.get_user(data, chat_str, user_str, username)
+            u["versus_wins"] = u.get("versus_wins", 0) + 1
+            database.save_json(bot, config.GROUP_DATA_FILE, data)
+            database.check_achievements(bot, chat_id, winner_id, username)
+
+    correct_reveal = ""
+    if not (c_correct or t_correct):
+        correct_reveal = f"\nCorrect answer: *{correct_answer}. {vs['question_display']}*"
+
+    send_and_delete(bot, chat_id,
+        f"{result_text}{correct_reveal}\n\n"
+        f"📊 {_score_display(vs)}",
+        parse_mode="Markdown")
+
+    if vs.get("consecutive_skips", 0) >= 2:
+        send_and_delete(bot, chat_id,
+            "⚠️ No activity for 2 rounds — match ended due to inactivity.",
+            parse_mode="Markdown")
+        _end_versus_match(bot, chat_id, winner_id=None, reason="inactivity")
+        return
+
+    _next_round_or_end(bot, chat_id)
+
+def _next_round_or_end(bot, chat_id):
+    if chat_id not in versus_games:
+        return
+
+    vs      = versus_games[chat_id]
+    c_score = vs["score"].get(str(vs["challenger_id"]), 0)
+    t_score = vs["score"].get(str(vs["target_id"]), 0)
+
+    if c_score >= WIN_TARGET:
+        _end_versus_match(bot, chat_id, winner_id=vs["challenger_id"], reason="score")
+        return
+    if t_score >= WIN_TARGET:
+        _end_versus_match(bot, chat_id, winner_id=vs["target_id"], reason="score")
+        return
+
+    def next_round():
+        time.sleep(3)
+        if chat_id in versus_games:
+            _countdown_then_round(bot, chat_id)
+    threading.Thread(target=next_round, daemon=True).start()
+
+def _end_versus_match(bot, chat_id, winner_id, reason):
+    if chat_id not in versus_games:
+        return
+
+    vs      = versus_games[chat_id]
+    c_name  = vs["challenger_name"]
+    t_name  = vs["target_name"]
+    c_score = vs["score"].get(str(vs["challenger_id"]), 0)
+    t_score = vs["score"].get(str(vs["target_id"]), 0)
+
+    if reason == "draw":
+        send_and_delete(bot, chat_id,
+            f"🤝 *MATCH DRAWN!*\n\n"
+            f"⚔️ {c_name} {c_score} — {t_score} {t_name}\n\n"
+            f"A worthy battle! 💪",
+            parse_mode="Markdown")
+        _payout_bets(bot, chat_id, winner_pick=None)
+
+    elif reason in ("inactivity", "error"):
+        send_and_delete(bot, chat_id,
+            f"⚠️ *Match ended.* Final: {c_name} {c_score} — {t_score} {t_name}",
+            parse_mode="Markdown")
+        _payout_bets(bot, chat_id, winner_pick=None)
+
+    elif reason == "forfeit":
+        winner_name = c_name if winner_id == vs["challenger_id"] else t_name
+        loser_name  = t_name if winner_id == vs["challenger_id"] else c_name
+        send_and_delete(bot, chat_id,
+            f"🏳️ *{loser_name} has forfeited!*\n\n"
+            f"🏆 *{winner_name}* wins by forfeit!\n"
+            f"Final: {c_name} {c_score} — {t_score} {t_name}",
+            parse_mode="Markdown")
+        winner_pick = "challenger" if winner_id == vs["challenger_id"] else "target"
+        _payout_bets(bot, chat_id, winner_pick)
+
+    else:
+        winner_name = c_name if winner_id == vs["challenger_id"] else t_name
+        loser_name  = t_name if winner_id == vs["challenger_id"] else c_name
+        winner_pick = "challenger" if winner_id == vs["challenger_id"] else "target"
+        username    = winner_name
+
+        pts, streak, mult, final = database.reward_user(
+            bot, chat_id, winner_id, username, config.POINTS_VERSUS_WIN)
+        streak_txt = f" 🔥 x{int(mult)}!" if streak > 1 else ""
+
+        send_and_delete(bot, chat_id,
+            f"⚔️ *MATCH OVER!*\n\n"
+            f"🏆 *{winner_name}* wins!\n"
+            f"Final score: *{c_name} {c_score} — {t_score} {t_name}*\n\n"
+            f"+{final} pts to {winner_name}{streak_txt}\n"
+            f"GG *{loser_name}*! 💪",
+            parse_mode="Markdown")
+        _payout_bets(bot, chat_id, winner_pick)
+
+    if chat_id in versus_games:
+        del versus_games[chat_id]
+
+def handle_versus_forfeit(bot, message):
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+
+    if chat_id not in versus_games:
+        bot.reply_to(message, "❌ No active versus match to forfeit.")
+        return
+
+    vs = versus_games[chat_id]
+    if user_id not in [vs["challenger_id"], vs["target_id"]]:
+        bot.reply_to(message, "❌ You're not in this match.")
+        return
+
+    winner_id = vs["target_id"] if user_id == vs["challenger_id"] else vs["challenger_id"]
+    _end_versus_match(bot, chat_id, winner_id=winner_id, reason="forfeit")
+
+def _payout_bets(bot, chat_id, winner_pick):
+    if chat_id not in versus_games:
+        return
+    bets = versus_games[chat_id].get("bets", {})
+    if not bets:
+        return
+
+    if winner_pick is None:
+        total = 0
+        for uid, bet in bets.items():
+            data = database.load_json(config.GROUP_DATA_FILE, {})
+            u    = database.get_user(data, str(chat_id), str(uid), bet["username"])
+            u["points"] += bet["amount"]
+            database.save_json(bot, config.GROUP_DATA_FILE, data)
+            total += bet["amount"]
+        send_and_delete(bot, chat_id,
+            f"🔁 *All bets refunded.* ({total} pts total)",
+            parse_mode="Markdown")
+        return
+
+    winners = {uid: b for uid, b in bets.items() if b["pick"] == winner_pick}
+    losers  = {uid: b for uid, b in bets.items() if b["pick"] != winner_pick}
+    pot     = sum(b["amount"] for b in losers.values())
+
+    if not winners:
+        send_and_delete(bot, chat_id,
+            f"💸 No one bet on the winner! Pot of *{pot} pts* is gone.",
+            parse_mode="Markdown")
+        return
+
+    total_stake = sum(b["amount"] for b in winners.values())
+    msg = "💰 *BET RESULTS*\n\n"
+    for uid, bet in winners.items():
+        winnings = bet["amount"] + int(pot * (bet["amount"] / total_stake))
+        data     = database.load_json(config.GROUP_DATA_FILE, {})
+        u        = database.get_user(data, str(chat_id), str(uid), bet["username"])
+        u["points"] += winnings
+        database.save_json(bot, config.GROUP_DATA_FILE, data)
+        msg += f"✅ *{bet['username']}* — bet {bet['amount']} pts, won *{winnings} pts*!\n"
+    for uid, bet in losers.items():
+        msg += f"❌ *{bet['username']}* — lost {bet['amount']} pts\n"
+    send_and_delete(bot, chat_id, msg, parse_mode="Markdown")
+
+# ---------------------------------------------------------------------------
+# DAILY CHALLENGE
+# ---------------------------------------------------------------------------
+
+def post_daily_challenge(bot):
+    trivia_data = load_json_file(config.TRIVIA_DB) or []
+    if not trivia_data:
+        return
+
+    state = database.load_json(config.DAILY_FILE, {})
+    today = str(datetime.date.today())
+    if state.get("date") == today:
+        return
+
+    q       = random.choice(trivia_data)
+    options = q["options"]
+    answer  = q["answer"]
+
+    state = {
+        "date": today, "question": q["question"], "options": options,
+        "answer": answer, "display": options[ord(answer) - ord("A")],
+        "category": q["category"], "answered": [],
+    }
+    database.save_json(bot, config.DAILY_FILE, state)
+
+    import telebot
+    markup = telebot.types.InlineKeyboardMarkup(row_width=2)
+    markup.add(*[
+        telebot.types.InlineKeyboardButton(f"{l}. {options[i]}", callback_data=f"daily_{l}")
+        for i, l in enumerate(["A","B","C","D"]) if i < len(options)
+    ])
+
+    text = (
+        f"🌟 *DAILY CHALLENGE — {today}*\n\n"
+        f"Category: *{q['category']}*\n\n"
+        f"*{q['question']}*\n\n"
+        f"A. {options[0]}\nB. {options[1]}\nC. {options[2]}\nD. {options[3]}\n\n"
+        f"🏆 First correct wins *{config.POINTS_DAILY_CHALLENGE} pts!*\n"
+        f"⚠️ One attempt per person!"
+    )
+
+    groups = database.get_all_groups()
+    for group_id in groups:
+        try:
+            members  = database.get_all_members(group_id)
+            tag_line = " ".join([f"[{name}](tg://user?id={uid})" for uid, name in members])
+            full_msg = f"{text}\n\n🌱 _Tagging the whole family:_\n{tag_line}"
+            # Send without auto-delete (this is a permanent announcement)
+            bot.send_message(group_id, full_msg, reply_markup=markup, parse_mode="Markdown")
+        except Exception as e:
+            print(f"Daily challenge post failed for {group_id}: {e}")
+
+def handle_daily_answer(bot, call):
+    chosen   = call.data.split("_")[1]
+    user_id  = call.from_user.id
+    chat_id  = call.message.chat.id
+    username = call.from_user.username or call.from_user.first_name
+
+    # Check if muted
+    if database.is_muted(chat_id, user_id):
+        bot.answer_callback_query(call.id, "🔇 You are muted!", show_alert=True)
+        return
+
+    state = database.load_json(config.DAILY_FILE, {})
+    if not state or state.get("date") != str(datetime.date.today()):
+        bot.answer_callback_query(call.id, "This challenge has expired.", show_alert=True)
+        return
+    if user_id in state.get("answered", []):
+        bot.answer_callback_query(call.id, "❌ You already answered today's challenge!", show_alert=True)
+        return
+
+    state["answered"].append(user_id)
+    database.save_json(bot, config.DAILY_FILE, state)
+
+    if chosen == state["answer"]:
+        pts, streak, mult, final = database.reward_user(
+            bot, chat_id, user_id, username, config.POINTS_DAILY_CHALLENGE)
+
+        # Track daily wins for achievements
+        data = database.load_json(config.GROUP_DATA_FILE, {})
+        chat_str = str(chat_id)
+        user_str = str(user_id)
+        u = database.get_user(data, chat_str, user_str, username)
+        u["daily_wins"] = u.get("daily_wins", 0) + 1
+        database.save_json(bot, config.GROUP_DATA_FILE, data)
+        database.check_achievements(bot, chat_id, user_id, username)
+
+        bot.answer_callback_query(call.id, f"✅ CORRECT! +{final} pts!", show_alert=True)
+        send_and_delete(bot, chat_id,
+            f"🌟 *{username}* cracked the Daily Challenge!\n"
+            f"Answer: *{state['answer']}. {state['display']}*\n+{final} pts! 🔥",
+            parse_mode="Markdown")
+    else:
+        database.penalise_wrong(bot, chat_id, user_id, username)
+        bot.answer_callback_query(call.id, "❌ Wrong! Better luck tomorrow.", show_alert=True)
+
+# ---------------------------------------------------------------------------
+# ANSWER CHECKER
+# ---------------------------------------------------------------------------
+
+def check_user_answer(bot, message):
+    chat_id  = message.chat.id
+    user_id  = message.from_user.id
+    username = message.from_user.username or message.from_user.first_name
+
+    database.track_member(bot, chat_id, user_id, username)
+
+    # Check if muted
+    if database.is_muted(chat_id, user_id):
+        send_and_delete(bot, chat_id, "🔇 You are muted! Wait until your mute expires.")
+        return True
+
+    if chat_id not in active_games:
+        return False
+
+    if message.text and message.text.startswith('/'):
+        cmd = message.text.split()[0].split('@')[0].lower()
+        if cmd == '/stop':
+            del active_games[chat_id]
+            send_and_delete(bot, chat_id, "🛑 Game canceled.")
+            return True
+        if cmd == '/hint':
+            process_hint(bot, message=message)
+            return True
+        return False
+
+    if active_games[chat_id].get("type") == "trivia":
+        return True  # Trivia uses buttons only
+
+    # Character game, picture game, or year game (button-based now)
+    user_guess = message.text.strip().lower()
+    session    = active_games[chat_id]
+
+    # If it's a year game, ignore typed answers (buttons only)
+    if session.get("type") == "year":
+        send_and_delete(bot, chat_id, "⚠️ Please use the buttons to select a year!")
+        return True
+
+    # Check for Double Down powerup
+    double_down_active = False
+    if session.get("type") in ("character", "picture"):
+        # Check if user has double down active
+        data = database.load_json(config.GROUP_DATA_FILE, {})
+        chat_str = str(chat_id)
+        user_str = str(user_id)
+        u = database.get_user(data, chat_str, user_str, username)
+        if u.get("powerups", {}).get("double_down", 0) > 0:
+            double_down_active = True
+
+    # Character or picture game with lenient matching
+    aliases = session.get("aliases", [])
+    if is_character_match(user_guess, session["answer"], aliases):
+        base_pts = config.POINTS_CHARACTER_GAME
+
+        # Apply double down if active
+        if double_down_active:
+            base_pts *= 2
+            # Use one double down
+            database.use_powerup(bot, chat_id, user_id, "double_down", username)
+
+        pts, streak, mult, final = database.reward_user(bot, chat_id, user_id, username, base_pts)
+        streak_txt = f"\n🔥 Streak: *{streak}* (x{mult})!" if streak > 1 else ""
+
+        if double_down_active:
+            streak_txt += " ⬆️ *Double Down active!*"
+
+        import telebot
+        markup = telebot.types.InlineKeyboardMarkup()
+        markup.row(telebot.types.InlineKeyboardButton(
+            "⏭️ Next Game", callback_data=f"nextgame_{chat_id}_{session['type']}"))
+
+        send_and_delete(
+            bot,
+            chat_id,
+            f"🎉 *CORRECT!* It was *{session['display']}*!\n"
+            f"+{final} pts (Total: {pts}){streak_txt}",
+            reply_markup=markup, parse_mode="Markdown"
+        )
+        del active_games[chat_id]
+        return True
+
+    # Wrong answer – handle streak freeze
+    data = database.load_json(config.GROUP_DATA_FILE, {})
+    chat_str = str(chat_id)
+    user_str = str(user_id)
+    u = database.get_user(data, chat_str, user_str, username)
+
+    # Check if user has streak freeze
+    if u.get("powerups", {}).get("streak_freeze", 0) > 0:
+        # Use one streak freeze
+        database.use_powerup(bot, chat_id, user_id, "streak_freeze", username)
+        # Don't break streak, just consume the powerup
+        send_and_delete(bot, chat_id, "🧊 *Streak Freeze activated!* Your streak is safe this time.")
+    else:
+        database.penalise_wrong(bot, chat_id, user_id, username)
+        send_and_delete(bot, chat_id, "❌ Wrong! Keep trying or use /hint for a clue.")
+
+    return True
+
+# ---------------------------------------------------------------------------
+# CALLBACK ROUTER
+# ---------------------------------------------------------------------------
+
+def handle_game_callback(bot, call):
+    data = call.data
+
+    if data.startswith("trivia_"):
+        handle_trivia_answer(bot, call)
+    elif data.startswith("year_ans_"):
+        handle_year_answer(bot, call)
+    elif data.startswith("vs_accept_"):
+        handle_versus_accept(bot, call)
+    elif data.startswith("vs_decline_"):
+        chat_id = int(data.split("_")[2])
+        if chat_id in versus_games:
+            del versus_games[chat_id]
+        bot.answer_callback_query(call.id)
+        send_and_delete(bot, chat_id, "❌ Challenge declined.")
+    elif data.startswith("vsbet_"):
+        handle_versus_bet(bot, call)
+    elif data.startswith("vsans_"):
+        handle_versus_answer(bot, call)
+    elif data.startswith("daily_"):
+        handle_daily_answer(bot, call)
+    elif data.startswith("hint_"):
+        process_hint(bot, call=call)
+        bot.answer_callback_query(call.id)
+    elif data.startswith("nextgame_"):
+        handle_next_game(bot, call)
+    elif data.startswith("stopgame_"):
+        chat_id = int(data.split("_")[1])
+        if chat_id in active_games:
+            del active_games[chat_id]
+        bot.answer_callback_query(call.id)
+        send_and_delete(bot, chat_id, "🛑 Game stopped.")

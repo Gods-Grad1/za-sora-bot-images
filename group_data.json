@@ -1,0 +1,91 @@
+{
+    "-1003926769016": {
+        "8234402535": {
+            "username": "Jishikateki",
+            "points": 5551,
+            "monthly_points": {
+                "2026-06": 5966
+            },
+            "yearly_points": {
+                "2026": 5966
+            },
+            "alltime_points": 5966,
+            "streak": 5,
+            "best_streak": 17,
+            "games_played": 40,
+            "correct": 34,
+            "title": "✨ The Chosen One",
+            "title_expires": 1784501512.7299716,
+            "hint_tokens": 0,
+            "double_xp_until": null
+        },
+        "6231510981": {
+            "username": "aldeniho",
+            "points": 3889,
+            "monthly_points": {
+                "2026-06": 3889
+            },
+            "yearly_points": {
+                "2026": 3889
+            },
+            "alltime_points": 3889,
+            "streak": 1,
+            "best_streak": 7,
+            "games_played": 34,
+            "correct": 26,
+            "title": null,
+            "title_expires": null,
+            "hint_tokens": 0,
+            "double_xp_until": null
+        },
+        "1454425797": {
+            "username": "Ntokozo144",
+            "points": 50,
+            "monthly_points": {
+                "2026-06": 50
+            },
+            "yearly_points": {
+                "2026": 50
+            },
+            "alltime_points": 50,
+            "streak": 1,
+            "best_streak": 1,
+            "games_played": 1,
+            "correct": 1,
+            "title": null,
+            "title_expires": null,
+            "hint_tokens": 0,
+            "double_xp_until": null
+        }
+    },
+    "8234402535": {
+        "8234402535": {
+            "username": "Jishikateki",
+            "points": 2460,
+            "monthly_points": {
+                "2026-06": 3375
+            },
+            "yearly_points": {
+                "2026": 3375
+            },
+            "alltime_points": 3375,
+            "streak": 4,
+            "best_streak": 9,
+            "games_played": 35,
+            "correct": 29,
+            "title": "🐐 The GOAT",
+            "title_expires": 1784791843.3751655,
+            "hint_tokens": 0,
+            "double_xp_until": null,
+            "last_spin": 0,
+            "badges": [
+                "first_blood",
+                "streak_5"
+            ],
+            "trivia_correct": 0,
+            "versus_wins": 0,
+            "daily_wins": 0,
+            "powerups": {}
+        }
+    }
+}

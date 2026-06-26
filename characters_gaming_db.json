@@ -1,0 +1,569 @@
+[
+  {
+    "name": "Mario",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a9/Mario_Series_Logo.svg",
+    "hints": [
+      "From: Video Games (Super Mario)",
+      "About: A cheerful mustache-wearing Italian plumber who regularly traverses the Mushroom Kingdom to rescue a princess from a turtle king."
+    ],
+    "aliases": [
+      "Mario",
+      "Jumpman"
+    ]
+  },
+  {
+    "name": "Pikachu",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a6/Pok%C3%A9mon_Pikachu_art.png",
+    "hints": [
+      "From: Video Games (Pokémon)",
+      "About: An iconic yellow rodent creature that stores high-voltage electrical energy inside its red cheeks."
+    ],
+    "aliases": [
+      "Pika"
+    ]
+  },
+  {
+    "name": "Sonic the Hedgehog",
+    "image": "https://upload.wikimedia.org/wikipedia/en/9/9f/Sonic_the_Hedgehog_character_artwork.png",
+    "hints": [
+      "From: Video Games (Sonic series)",
+      "About: A blue hedgehog capable of traveling at supersonic speed to thwart a round robot-building scientist."
+    ],
+    "aliases": [
+      "Sonic",
+      "Blue Blur"
+    ]
+  },
+  {
+    "name": "Link",
+    "image": "https://upload.wikimedia.org/wikipedia/en/2/22/Link_TotK.png",
+    "hints": [
+      "From: Video Games (The Legend of Zelda)",
+      "About: The green-clad elven Champion of Hyrule who protects the Triforce using the Master Sword."
+    ],
+    "aliases": [
+      "Link",
+      "Hero of Hyrule"
+    ]
+  },
+  {
+    "name": "Master Chief",
+    "image": "https://upload.wikimedia.org/wikipedia/en/0/05/Master_Chief_in_Halo_Infinite.png",
+    "hints": [
+      "From: Video Games (Halo)",
+      "About: An augmented Spartan super-soldier clad in green armor who defends humanity against alien networks alongside an AI partner."
+    ],
+    "aliases": [
+      "Chief",
+      "John-117"
+    ]
+  },
+  {
+    "name": "Kratos",
+    "image": "https://upload.wikimedia.org/wikipedia/en/7/77/Kratos_GoW_2018.png",
+    "hints": [
+      "From: Video Games (God of War)",
+      "About: A scarred Spartan warrior who tore through the Greek pantheon before heading north to raise his son."
+    ],
+    "aliases": [
+      "Kratos",
+      "Ghost of Sparta"
+    ]
+  },
+  {
+    "name": "Cloud Strife",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/ae/Cloud_Strife_FFVII_Remake.png",
+    "hints": [
+      "From: Video Games (Final Fantasy VII)",
+      "About: A spiky-haired mercenary with a giant Buster Sword battling an eco-destroying power company and a legendary soldier."
+    ],
+    "aliases": [
+      "Cloud"
+    ]
+  },
+  {
+    "name": "Solid Snake",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/e0/Solid_Snake_MGS4.png",
+    "hints": [
+      "From: Video Games (Metal Gear Solid)",
+      "About: An elite infiltration operative famous for crawling inside cardboard boxes and stopping bipedal nuclear tanks."
+    ],
+    "aliases": [
+      "Snake"
+    ]
+  },
+  {
+    "name": "Lara Croft",
+    "image": "https://upload.wikimedia.org/wikipedia/en/2/26/Lara_Croft_Tomb_Raider_2013.png",
+    "hints": [
+      "From: Video Games (Tomb Raider)",
+      "About: An athletic British archaeologist who braves ancient hazards and traps around the globe to protect relics."
+    ],
+    "aliases": [
+      "Lara"
+    ]
+  },
+  {
+    "name": "Steve",
+    "image": "https://upload.wikimedia.org/wikipedia/en/4/44/Minecraft_Steve.png",
+    "hints": [
+      "From: Video Games (Minecraft)",
+      "About: A silent, blocky explorer who builds structures and fights explosive green entities in an endless pixel landscape."
+    ],
+    "aliases": [
+      "Steve",
+      "Minecraft Steve"
+    ]
+  },
+  {
+    "name": "Geralt of Rivia",
+    "image": "https://upload.wikimedia.org/wikipedia/en/c/c9/Geralt_of_Rivia_Witcher.png",
+    "hints": [
+      "From: Video Games (The Witcher)",
+      "About: A mutated, white-haired monster tracker for hire who uses dual swords and simple tracking signs."
+    ],
+    "aliases": [
+      "Geralt",
+      "White Wolf"
+    ]
+  },
+  {
+    "name": "Arthur Morgan",
+    "image": "https://upload.wikimedia.org/wikipedia/en/3/33/Arthur_Morgan_RDR2.png",
+    "hints": [
+      "From: Video Games (Red Dead Redemption 2)",
+      "About: A reliable outlaw struggling with loyalty, morality, and terminal illness during the decline of the Wild West."
+    ],
+    "aliases": [
+      "Arthur"
+    ]
+  },
+  {
+    "name": "Nathan Drake",
+    "image": "https://upload.wikimedia.org/wikipedia/en/2/2f/Nathan_Drake_Uncharted_4.png",
+    "hints": [
+      "From: Video Games (Uncharted)",
+      "About: A witty treasure hunter who survives historical gunfights, collapsing bridges, and ancient puzzles."
+    ],
+    "aliases": [
+      "Nate",
+      "Drake"
+    ]
+  },
+  {
+    "name": "Ezio Auditore da Firenze",
+    "image": "https://upload.wikimedia.org/wikipedia/en/b/b4/Ezio_Auditore_ACII.png",
+    "hints": [
+      "From: Video Games (Assassin's Creed)",
+      "About: An Italian nobleman who scales Renaissance cities using hidden wrist blades to avenge his family."
+    ],
+    "aliases": [
+      "Ezio"
+    ]
+  },
+  {
+    "name": "Leon S. Kennedy",
+    "image": "https://upload.wikimedia.org/wikipedia/en/5/52/Leon_S._Kennedy_RE4_Remake.png",
+    "hints": [
+      "From: Video Games (Resident Evil)",
+      "About: A rookie cop who survived a biological outbreak and became a federal agent sent to rescue the president's daughter."
+    ],
+    "aliases": [
+      "Leon"
+    ]
+  },
+  {
+    "name": "Doomguy / Doom Slayer",
+    "image": "https://upload.wikimedia.org/wikipedia/en/5/59/Doom_Slayer_Doom_Eternal.png",
+    "hints": [
+      "From: Video Games (DOOM)",
+      "About: A silent, un-stoppable marine who rips and tears through hordes of hellish entities using an arsenal of heavy firearms."
+    ],
+    "aliases": [
+      "Doomguy",
+      "Doom Slayer"
+    ]
+  },
+  {
+    "name": "Samus Aran",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/e2/Samus_Aran_Metroid_Dread.png",
+    "hints": [
+      "From: Video Games (Metroid)",
+      "About: A silent bounty hunter who explores alien catacombs using a high-tech arm-cannon suit that shapes into a ball."
+    ],
+    "aliases": [
+      "Samus"
+    ]
+  },
+  {
+    "name": "Ryu",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/e5/Ryu_Street_Fighter_6.png",
+    "hints": [
+      "From: Video Games (Street Fighter)",
+      "About: A wandering martial artist in a white gi searching for the true meaning of combat through energy fireball strikes."
+    ],
+    "aliases": [
+      "Ryu"
+    ]
+  },
+  {
+    "name": "Scorpion",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/e7/Scorpion_MK11.png",
+    "hints": [
+      "From: Video Games (Mortal Kombat)",
+      "About: A hell-spawned ninja wraith who pulls opponents toward him using a spear line while yelling for them to approach."
+    ],
+    "aliases": [
+      "Scorpion",
+      "Hanzo Hasashi"
+    ]
+  },
+  {
+    "name": "Sub-Zero",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a7/Sub-Zero_MK11.png",
+    "hints": [
+      "From: Video Games (Mortal Kombat)",
+      "About: A deadly Grandmaster assassin who manipulates ice to freeze his fighting targets solid."
+    ],
+    "aliases": [
+      "Kuai Liang"
+    ]
+  },
+  {
+    "name": "Pac-Man",
+    "image": "https://upload.wikimedia.org/wikipedia/en/0/06/Pac-man.png",
+    "hints": [
+      "From: Video Games (Pac-Man)",
+      "About: A circular yellow icon who maneuvers through neon corridors eating dots while escaping a quartet of colorful ghosts."
+    ],
+    "aliases": [
+      "Pacman",
+      "Pac"
+    ]
+  },
+  {
+    "name": "Sans",
+    "image": "https://upload.wikimedia.org/wikipedia/en/0/01/Sans_Undertale.png",
+    "hints": [
+      "From: Video Games (Undertale)",
+      "About: A lazy skeleton comic who judges your sins and triggers a brutally fast glowing-eye battle if you clear out his world."
+    ],
+    "aliases": [
+      "Sans"
+    ]
+  },
+  {
+    "name": "Ellie",
+    "image": "https://upload.wikimedia.org/wikipedia/en/0/03/Ellie_TLOU2.png",
+    "hints": [
+      "From: Video Games (The Last of Us)",
+      "About: A resourceful girl immune to a fungal plague who navigates a bleak post-outbreak world on a quest for vengeance."
+    ],
+    "aliases": [
+      "Ellie"
+    ]
+  },
+  {
+    "name": "Joel Miller",
+    "image": "https://upload.wikimedia.org/wikipedia/en/0/07/Joel_TLOU1.png",
+    "hints": [
+      "From: Video Games (The Last of Us)",
+      "About: A hardened smuggler devastated by personal loss who acts as a protective father figure across a broken territory."
+    ],
+    "aliases": [
+      "Joel"
+    ]
+  },
+  {
+    "name": "Sephiroth",
+    "image": "https://upload.wikimedia.org/wikipedia/en/4/4d/Sephiroth_FFVII_Remake.png",
+    "hints": [
+      "From: Video Games (Final Fantasy VII)",
+      "About: A tragic, silver-haired elite war hero wielding an impossibly long katana who attempts to ascend as a god."
+    ],
+    "aliases": [
+      "Sephiroth"
+    ]
+  },
+  {
+    "name": "Donkey Kong",
+    "image": "https://upload.wikimedia.org/wikipedia/en/c/c2/Donkey_Kong_character.png",
+    "hints": [
+      "From: Video Games (Donkey Kong)",
+      "About: A powerful, tie-wearing gorilla who smashes barrels and protects his massive hoard of bananas."
+    ],
+    "aliases": [
+      "DK"
+    ]
+  },
+  {
+    "name": "Bowser",
+    "image": "https://upload.wikimedia.org/wikipedia/en/9/92/Bowser_Stock_Art_2014.png",
+    "hints": [
+      "From: Video Games (Super Mario)",
+      "About: The fire-breathing, spike-shelled King of the Koopas who constantly captures royal targets."
+    ],
+    "aliases": [
+      "Bowser",
+      "King Koopa"
+    ]
+  },
+  {
+    "name": "Princess Peach",
+    "image": "https://upload.wikimedia.org/wikipedia/en/1/16/Princess_Peach_Stock_Art.png",
+    "hints": [
+      "From: Video Games (Super Mario)",
+      "About: The pink-clad monarch of the Mushroom Kingdom who uses floating jumps and parasols."
+    ],
+    "aliases": [
+      "Peach"
+    ]
+  },
+  {
+    "name": "Luigi",
+    "image": "https://upload.wikimedia.org/wikipedia/en/7/73/Luigi_NSMBU_Deluxe.png",
+    "hints": [
+      "From: Video Games (Super Mario)",
+      "About: A nervous, green-clad taller brother who uses a custom vacuum pack to clear ghosts from haunted mansions."
+    ],
+    "aliases": [
+      "Luigi",
+      "Green Mario"
+    ]
+  },
+  {
+    "name": "Crash Bandicoot",
+    "image": "https://upload.wikimedia.org/wikipedia/en/1/16/Crash_Bandicoot_ there.png",
+    "hints": [
+      "From: Video Games (Crash Bandicoot)",
+      "About: A hyperactive, spinning marsupial who smashes fruit crates to stop the operations of an evil scientist."
+    ],
+    "aliases": [
+      "Crash"
+    ]
+  },
+  {
+    "name": "Spyro the Dragon",
+    "image": "https://upload.wikimedia.org/wikipedia/en/5/53/Spyro_the_Dragon.png",
+    "hints": [
+      "From: Video Games (Spyro)",
+      "About: A small purple dragon who glides through fantasy realms roasting gems and freeing elder dragons."
+    ],
+    "aliases": [
+      "Spyro"
+    ]
+  },
+  {
+    "name": "Agent 47",
+    "image": "https://upload.wikimedia.org/wikipedia/en/f/f4/Agent_47_Hitman.png",
+    "hints": [
+      "From: Video Games (Hitman)",
+      "About: A bald, cloned contract assassin with a barcode stamped on the back of his neck who uses seamless disguises."
+    ],
+    "aliases": [
+      "47"
+    ]
+  },
+  {
+    "name": "Commander Shepard",
+    "image": "https://upload.wikimedia.org/wikipedia/en/e/e0/Mass_Effect_3_N7_Shepard.png",
+    "hints": [
+      "From: Video Games (Mass Effect)",
+      "About: An elite starship commander who rallies an inter-species crew to stop an extinction cycle by giant machines."
+    ],
+    "aliases": [
+      "Shepard"
+    ]
+  },
+  {
+    "name": "Garrus Vakarian",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a0/Garrus_Vakarian.png",
+    "hints": [
+      "From: Video Games (Mass Effect)",
+      "About: A vigilant, blue-armored alien sniper who loves calibrating weapon tracking software mid-flight."
+    ],
+    "aliases": [
+      "Garrus"
+    ]
+  },
+  {
+    "name": "Ciri",
+    "image": "https://upload.wikimedia.org/wikipedia/en/b/b3/Ciri_Witcher_3_design.png",
+    "hints": [
+      "From: Video Games (The Witcher)",
+      "About: A gray-haired royal heir possessing elder blood that allows her to warp space and jump dimensions."
+    ],
+    "aliases": [
+      "Ciri",
+      "Cirilla"
+    ]
+  },
+  {
+    "name": "John Marston",
+    "image": "https://upload.wikimedia.org/wikipedia/en/9/97/John_Marston_RDR.png",
+    "hints": [
+      "From: Video Games (Red Dead Redemption)",
+      "About: A scarred former gang hunter forced by agents to eliminate his old brothers-in-arms to secure his family."
+    ],
+    "aliases": [
+      "John"
+    ]
+  },
+  {
+    "name": "Gordon Freeman",
+    "image": "https://upload.wikimedia.org/wikipedia/en/c/c4/Gordon_Freeman.png",
+    "hints": [
+      "From: Video Games (Half-Life)",
+      "About: A silent research physicist who battles dimensional alien incursions using a signature hazard suit and a crowbar."
+    ],
+    "aliases": [
+      "Gordon",
+      "Freeman"
+    ]
+  },
+  {
+    "name": "GLaDOS",
+    "image": "https://upload.wikimedia.org/wikipedia/en/0/00/GLaDOS_Portal2.png",
+    "hints": [
+      "From: Video Games (Portal)",
+      "About: A passive-aggressive AI system that forces test subjects through portals using promises of cake."
+    ],
+    "aliases": [
+      "GLaDOS"
+    ]
+  },
+  {
+    "name": "Chell",
+    "image": "https://upload.wikimedia.org/wikipedia/en/d/df/Chell_Portal_2.png",
+    "hints": [
+      "From: Video Games (Portal)",
+      "About: A silent test subject in an orange jumpsuit who outsmarts an AI facility using a spatial portal gun."
+    ],
+    "aliases": [
+      "Chell"
+    ]
+  },
+  {
+    "name": "Chun-Li",
+    "image": "https://upload.wikimedia.org/wikipedia/en/6/61/Chun-Li_Street_Fighter_6.png",
+    "hints": [
+      "From: Video Games (Street Fighter)",
+      "About: An Interpol agent with exceptionally strong legs who fights to dismantle an underworld syndicate."
+    ],
+    "aliases": [
+      "Chun Li",
+      "Chun"
+    ]
+  },
+  {
+    "name": "Dante",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a2/Dante_DMC5.png",
+    "hints": [
+      "From: Video Games (Devil May Cry)",
+      "About: A cocky half-demon investigator in a red trench coat who cycles through swords and dual pistols to hunt monsters."
+    ],
+    "aliases": [
+      "Dante"
+    ]
+  },
+  {
+    "name": "Vergil",
+    "image": "https://upload.wikimedia.org/wikipedia/en/f/f6/Vergil_DMC5.png",
+    "hints": [
+      "From: Video Games (Devil May Cry)",
+      "About: A cold, blue-clad half-demon swordsman obsessed with obtaining more power using his spatial blade Yamato."
+    ],
+    "aliases": [
+      "Vergil"
+    ]
+  },
+  {
+    "name": "Niko Bellic",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/ab/Niko_Bellic_GTA_IV.png",
+    "hints": [
+      "From: Video Games (Grand Theft Auto IV)",
+      "About: An Eastern European war veteran who comes to Liberty City seeking an elusive war betrayer."
+    ],
+    "aliases": [
+      "Niko"
+    ]
+  },
+  {
+    "name": "Trevor Philips",
+    "image": "https://upload.wikimedia.org/wikipedia/en/c/c2/Trevor_Philips_GTAV.png",
+    "hints": [
+      "From: Video Games (Grand Theft Auto V)",
+      "About: An unhinged, highly volatile former military pilot who runs a chaotic desert crime operation."
+    ],
+    "aliases": [
+      "Trevor"
+    ]
+  },
+  {
+    "name": "CJ (Carl Johnson)",
+    "image": "https://upload.wikimedia.org/wikipedia/en/9/9e/Carl_Johnson_GTA_San_Andreas.png",
+    "hints": [
+      "From: Video Games (Grand Theft Auto: San Andreas)",
+      "About: A gang member who returns home to Los Santos to clean up his neighborhood and avenge his mother."
+    ],
+    "aliases": [
+      "CJ",
+      "Carl Johnson"
+    ]
+  },
+  {
+    "name": "Marcus Fenix",
+    "image": "https://upload.wikimedia.org/wikipedia/en/0/0d/Marcus_Fenix_Gears_5.png",
+    "hints": [
+      "From: Video Games (Gears of War)",
+      "About: A gruff, armored soldier leading squad assaults against subterranean monster swarms using a chainsaw rifle."
+    ],
+    "aliases": [
+      "Marcus"
+    ]
+  },
+  {
+    "name": "Sylvanas Windrunner",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/a1/Sylvanas_Windrunner_Cataclysm.png",
+    "hints": [
+      "From: Video Games (World of Warcraft)",
+      "About: A fallen ranger commander turned banshee queen who ruled over an undead faction before altering the afterlife."
+    ],
+    "aliases": [
+      "Sylvanas"
+    ]
+  },
+  {
+    "name": "Illidan Stormrage",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/ab/Illidan_Stormrage_Artwork.jpg",
+    "hints": [
+      "From: Video Games (World of Warcraft)",
+      "About: A blind elf demon hunter wielding twin curved blades who spent ten thousand years locked away for his choice of power."
+    ],
+    "aliases": [
+      "Illidan"
+    ]
+  },
+  {
+    "name": "Shadowheart",
+    "image": "https://upload.wikimedia.org/wikipedia/en/a/ad/Shadowheart_BG3.png",
+    "hints": [
+      "From: Video Games (Baldur's Gate 3)",
+      "About: A secretive cleric of a dark goddess carrying a mysterious spatial artifact while hiding her memory-wiped past."
+    ],
+    "aliases": [
+      "Shadowheart"
+    ]
+  },
+  {
+    "name": "Astarion",
+    "image": "https://upload.wikimedia.org/wikipedia/en/4/41/Astarion_BG3.png",
+    "hints": [
+      "From: Video Games (Baldur's Gate 3)",
+      "About: A flamboyant, white-haired high elf vampire spawn who enjoys a newly found freedom from his cruel master."
+    ],
+    "aliases": [
+      "Astarion"
+    ]
+  }
+]
