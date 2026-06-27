@@ -5,7 +5,6 @@ import csv
 import datetime
 import requests
 import config
-from collections import defaultdict
 
 CSV_DATA_CACHE = {}
 
@@ -57,108 +56,7 @@ def fetch_csv_cached(bot, url, duration=300):
         return []
 
 # ---------------------------------------------------------------------------
-# DATA MIGRATION: GROUP → GLOBAL
-# ---------------------------------------------------------------------------
-
-def migrate_group_to_global(bot):
-    """Migrates all user data from group_data.json to user_data.json (global).
-    This runs once on startup and is skipped if already done."""
-    flag_file = config.MIGRATION_FLAG
-    if os.path.exists(flag_file):
-        print("✅ Migration already done. Skipping.")
-        return
-
-    print("🔄 Starting migration from group_data.json to user_data.json...")
-    group_data = load_json(config.GROUP_DATA_FILE, {})
-    user_data = load_json(config.USER_DATA_FILE, {})
-
-    # Track which groups exist
-    groups_set = set()
-
-    for chat_str, users in group_data.items():
-        chat_id = int(chat_str)
-        groups_set.add(chat_id)
-        for user_str, u in users.items():
-            user_id = int(user_str)
-            if user_id not in user_data:
-                user_data[user_id] = {
-                    "username": u.get("username", "Player"),
-                    "points": 0,
-                    "monthly_points": {},
-                    "yearly_points": {},
-                    "alltime_points": 0,
-                    "streak": 0,
-                    "best_streak": 0,
-                    "games_played": 0,
-                    "correct": 0,
-                    "title": None,
-                    "title_expires": None,
-                    "hint_tokens": 0,
-                    "double_xp_until": None,
-                    "last_spin": 0,
-                    "badges": [],
-                    "trivia_correct": 0,
-                    "versus_wins": 0,
-                    "daily_wins": 0,
-                    "powerups": {},
-                }
-            # Merge data
-            for key in ["points", "alltime_points", "streak", "best_streak", "games_played", "correct", "trivia_correct", "versus_wins", "daily_wins", "hint_tokens"]:
-                if u.get(key, 0) > user_data[user_id].get(key, 0):
-                    user_data[user_id][key] = u.get(key, 0)
-            # Merge monthly_points
-            for month, pts in u.get("monthly_points", {}).items():
-                user_data[user_id]["monthly_points"][month] = user_data[user_id]["monthly_points"].get(month, 0) + pts
-            # Merge yearly_points
-            for year, pts in u.get("yearly_points", {}).items():
-                user_data[user_id]["yearly_points"][year] = user_data[user_id]["yearly_points"].get(year, 0) + pts
-            # Merge badges
-            for badge in u.get("badges", []):
-                if badge not in user_data[user_id]["badges"]:
-                    user_data[user_id]["badges"].append(badge)
-            # Merge powerups
-            for pu_id, count in u.get("powerups", {}).items():
-                user_data[user_id]["powerups"][pu_id] = user_data[user_id]["powerups"].get(pu_id, 0) + count
-            # Title – keep the latest active title if user has one
-            if u.get("title") and not user_data[user_id].get("title"):
-                user_data[user_id]["title"] = u.get("title")
-                user_data[user_id]["title_expires"] = u.get("title_expires")
-
-    # Save global user data
-    save_json(bot, config.USER_DATA_FILE, user_data)
-
-    # Update group_data to only store groups (not user data)
-    groups_only = {str(g): {} for g in groups_set}
-    save_json(bot, config.GROUP_DATA_FILE, groups_only)
-
-    # Mark migration as done
-    with open(flag_file, "w") as f:
-        f.write(datetime.datetime.now().isoformat())
-
-    print(f"✅ Migration complete! {len(user_data)} users migrated. Groups: {len(groups_set)}")
-
-# ---------------------------------------------------------------------------
-# GROUP TRACKING
-# ---------------------------------------------------------------------------
-
-def track_group(chat_id):
-    """Ensures a group is tracked."""
-    data = load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    if chat_str not in data:
-        data[chat_str] = {}
-        save_json(None, config.GROUP_DATA_FILE, data)  # Save without bot instance
-
-def get_all_groups():
-    """Returns list of all tracked group IDs."""
-    try:
-        data = load_json(config.GROUP_DATA_FILE, {})
-        return [int(cid) for cid in data.keys()]
-    except Exception:
-        return []
-
-# ---------------------------------------------------------------------------
-# USER HELPERS (GLOBAL)
+# GROUP DATA HELPERS
 # ---------------------------------------------------------------------------
 
 def _now_month_key():
@@ -167,82 +65,71 @@ def _now_month_key():
 def _now_year_key():
     return str(datetime.datetime.now().year)
 
-def get_user(user_id, username=None):
-    """Gets or creates a user entry in the global user_data."""
-    data = load_json(config.USER_DATA_FILE, {})
-    if user_id not in data:
-        data[user_id] = {
-            "username": username or "Player",
-            "points": 0,
-            "monthly_points": {},
-            "yearly_points": {},
-            "alltime_points": 0,
-            "streak": 0,
-            "best_streak": 0,
-            "games_played": 0,
-            "correct": 0,
-            "title": None,
-            "title_expires": None,
-            "hint_tokens": 0,
+def get_user(data, chat_str, user_str, username):
+    """Ensures user entry exists with all required fields in a group."""
+    if chat_str not in data:
+        data[chat_str] = {}
+    if user_str not in data[chat_str]:
+        data[chat_str][user_str] = {
+            "username":        username or "Player",
+            "points":          0,
+            "monthly_points":  {},
+            "yearly_points":   {},
+            "alltime_points":  0,
+            "streak":          0,
+            "best_streak":     0,
+            "games_played":    0,
+            "correct":         0,
+            "title":           None,
+            "title_expires":   None,
+            "hint_tokens":     0,
             "double_xp_until": None,
-            "last_spin": 0,
-            "badges": [],
-            "trivia_correct": 0,
-            "versus_wins": 0,
-            "daily_wins": 0,
-            "powerups": {},
+            "last_spin":       0,
+            "badges":          [],
+            "trivia_correct":  0,
+            "versus_wins":     0,
+            "daily_wins":      0,
+            "powerups":        {},
         }
-    u = data[user_id]
+    u = data[chat_str][user_str]
+    defaults = {
+        "monthly_points": {}, "yearly_points": {}, "alltime_points": 0,
+        "streak": 0, "best_streak": 0, "games_played": 0, "correct": 0,
+        "title": None, "title_expires": None, "hint_tokens": 0,
+        "double_xp_until": None, "last_spin": 0, "badges": [],
+        "trivia_correct": 0, "versus_wins": 0, "daily_wins": 0,
+        "powerups": {},
+    }
+    for k, v in defaults.items():
+        if k not in u:
+            u[k] = v
     if username:
         u["username"] = username
     return u
 
-def save_user(bot, user_id, user_data):
-    """Saves a single user's data."""
-    data = load_json(config.USER_DATA_FILE, {})
-    data[user_id] = user_data
-    save_json(bot, config.USER_DATA_FILE, data)
-
 def track_member(bot, chat_id, user_id, username):
-    """Tracks a member in a group (global stats)."""
-    track_group(chat_id)
-    user = get_user(user_id, username)
-    if username:
-        user["username"] = username
-    save_user(bot, user_id, user)
+    """Tracks a member in a group."""
+    data = load_json(config.GROUP_DATA_FILE, {})
+    chat_str = str(chat_id)
+    user_str = str(user_id)
+    get_user(data, chat_str, user_str, username)
+    save_json(bot, config.GROUP_DATA_FILE, data)
 
 def get_all_members(chat_id):
-    """Returns list of (user_id, username) for all tracked members in a group.
-    This now uses the global user_data and the group tracking list."""
-    group_data = load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    if chat_str not in group_data:
-        return []
-    # We need to get all users who have interacted with this group
-    # Since we don't track per-group user lists separately, we'll use the global user_data
-    # and filter based on activity. A simpler approach: maintain a per-group user list in group_data.
-    # Let's add a member list to group_data.
-    if "members" not in group_data[chat_str]:
-        group_data[chat_str]["members"] = []
-        save_json(None, config.GROUP_DATA_FILE, group_data)
-    members = group_data[chat_str].get("members", [])
-    result = []
-    for uid, username in members:
-        u = get_user(uid)
-        result.append((uid, u.get("username", username or "Player")))
-    return result
-
-def add_member_to_group(chat_id, user_id, username):
-    """Adds a member to the group's member list."""
+    """Returns list of (user_id, username) for all tracked members in a group."""
     data = load_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     if chat_str not in data:
-        data[chat_str] = {}
-    if "members" not in data[chat_str]:
-        data[chat_str]["members"] = []
-    if not any(m[0] == user_id for m in data[chat_str]["members"]):
-        data[chat_str]["members"].append((user_id, username))
-        save_json(None, config.GROUP_DATA_FILE, data)
+        return []
+    return [(int(uid), u.get("username", "Player"))
+            for uid, u in data[chat_str].items()]
+
+def get_all_groups():
+    try:
+        data = load_json(config.GROUP_DATA_FILE, {})
+        return [int(cid) for cid in data.keys()]
+    except Exception:
+        return []
 
 # ---------------------------------------------------------------------------
 # POINTS & STREAKS
@@ -257,117 +144,119 @@ def get_streak_multiplier(streak):
     return multiplier
 
 def reward_user(bot, chat_id, user_id, username, amount=50):
-    track_group(chat_id)
-    add_member_to_group(chat_id, user_id, username)
-    user = get_user(user_id, username)
+    data = load_json(config.GROUP_DATA_FILE, {})
+    chat_str = str(chat_id)
+    user_str = str(user_id)
+    u = get_user(data, chat_str, user_str, username)
 
-    user["streak"] += 1
-    user["correct"] += 1
-    if user["streak"] > user["best_streak"]:
-        user["best_streak"] = user["streak"]
+    u["streak"] += 1
+    u["correct"] += 1
+    if u["streak"] > u["best_streak"]:
+        u["best_streak"] = u["streak"]
 
-    multiplier = get_streak_multiplier(user["streak"])
-    if user.get("double_xp_until") and time.time() < user["double_xp_until"]:
+    multiplier = get_streak_multiplier(u["streak"])
+    if u.get("double_xp_until") and time.time() < u["double_xp_until"]:
         multiplier *= 2
 
     final = int(amount * multiplier)
 
     month_key = _now_month_key()
     year_key = _now_year_key()
-    user["points"] += final
-    user["alltime_points"] += final
-    user["monthly_points"][month_key] = user["monthly_points"].get(month_key, 0) + final
-    user["yearly_points"][year_key] = user["yearly_points"].get(year_key, 0) + final
-    user["games_played"] += 1
+    u["points"] += final
+    u["alltime_points"] += final
+    u["monthly_points"][month_key] = u["monthly_points"].get(month_key, 0) + final
+    u["yearly_points"][year_key] = u["yearly_points"].get(year_key, 0) + final
+    u["games_played"] += 1
 
-    save_user(bot, user_id, user)
-
-    # Check achievements
-    check_achievements(bot, user_id, username)
-
-    return user["points"], user["streak"], multiplier, final
+    save_json(bot, config.GROUP_DATA_FILE, data)
+    check_achievements(bot, chat_id, user_id, username)
+    return u["points"], u["streak"], multiplier, final
 
 def penalise_wrong(bot, chat_id, user_id, username):
-    track_group(chat_id)
-    add_member_to_group(chat_id, user_id, username)
-    user = get_user(user_id, username)
-    user["streak"] = 0
-    user["games_played"] += 1
-    save_user(bot, user_id, user)
+    data = load_json(config.GROUP_DATA_FILE, {})
+    chat_str = str(chat_id)
+    user_str = str(user_id)
+    u = get_user(data, chat_str, user_str, username)
+    u["streak"] = 0
+    u["games_played"] += 1
+    save_json(bot, config.GROUP_DATA_FILE, data)
 
 def deduct_points(bot, chat_id, user_id, username, amount):
-    track_group(chat_id)
-    add_member_to_group(chat_id, user_id, username)
-    user = get_user(user_id, username)
-    user["points"] = max(0, user["points"] - amount)
-    save_user(bot, user_id, user)
-    return user["points"]
+    data = load_json(config.GROUP_DATA_FILE, {})
+    chat_str = str(chat_id)
+    user_str = str(user_id)
+    u = get_user(data, chat_str, user_str, username)
+    u["points"] = max(0, u["points"] - amount)
+    save_json(bot, config.GROUP_DATA_FILE, data)
+    return u["points"]
 
 # ---------------------------------------------------------------------------
-# POWER-UPS (Global)
+# POWER-UPS
 # ---------------------------------------------------------------------------
 
 def use_powerup(bot, chat_id, user_id, username, powerup_id):
-    track_group(chat_id)
-    add_member_to_group(chat_id, user_id, username)
-    user = get_user(user_id, username)
-    if user.get("powerups", {}).get(powerup_id, 0) > 0:
-        user["powerups"][powerup_id] -= 1
-        save_user(bot, user_id, user)
+    data = load_json(config.GROUP_DATA_FILE, {})
+    chat_str = str(chat_id)
+    user_str = str(user_id)
+    u = get_user(data, chat_str, user_str, username)
+    if u.get("powerups", {}).get(powerup_id, 0) > 0:
+        u["powerups"][powerup_id] -= 1
+        save_json(bot, config.GROUP_DATA_FILE, data)
         return True
     return False
 
 def add_powerup(bot, chat_id, user_id, username, powerup_id, count=1):
-    track_group(chat_id)
-    add_member_to_group(chat_id, user_id, username)
-    user = get_user(user_id, username)
-    user.setdefault("powerups", {})
-    user["powerups"][powerup_id] = user["powerups"].get(powerup_id, 0) + count
-    save_user(bot, user_id, user)
+    data = load_json(config.GROUP_DATA_FILE, {})
+    chat_str = str(chat_id)
+    user_str = str(user_id)
+    u = get_user(data, chat_str, user_str, username)
+    u.setdefault("powerups", {})
+    u["powerups"][powerup_id] = u["powerups"].get(powerup_id, 0) + count
+    save_json(bot, config.GROUP_DATA_FILE, data)
 
 # ---------------------------------------------------------------------------
-# ACHIEVEMENTS / BADGES (Global)
+# ACHIEVEMENTS / BADGES
 # ---------------------------------------------------------------------------
 
-def unlock_badge(bot, user_id, username, badge_id):
-    user = get_user(user_id, username)
-    if badge_id not in user.get("badges", []):
-        user.setdefault("badges", [])
-        user["badges"].append(badge_id)
-        save_user(bot, user_id, user)
+def unlock_badge(bot, chat_id, user_id, username, badge_id):
+    data = load_json(config.GROUP_DATA_FILE, {})
+    chat_str = str(chat_id)
+    user_str = str(user_id)
+    u = get_user(data, chat_str, user_str, username)
+    if badge_id not in u.get("badges", []):
+        u.setdefault("badges", [])
+        u["badges"].append(badge_id)
+        save_json(bot, config.GROUP_DATA_FILE, data)
         return True
     return False
 
-def check_achievements(bot, user_id, username):
-    user = get_user(user_id, username)
+def check_achievements(bot, chat_id, user_id, username):
+    data = load_json(config.GROUP_DATA_FILE, {})
+    chat_str = str(chat_id)
+    user_str = str(user_id)
+    u = get_user(data, chat_str, user_str, username)
     unlocked = []
     for badge_id, badge_data in config.ACHIEVEMENTS.items():
-        if badge_id in user.get("badges", []):
+        if badge_id in u.get("badges", []):
             continue
         condition = badge_data.get("condition", {})
         meets_condition = True
         for key, required in condition.items():
-            if user.get(key, 0) < required:
+            if u.get(key, 0) < required:
                 meets_condition = False
                 break
         if meets_condition:
-            user.setdefault("badges", [])
-            user["badges"].append(badge_id)
+            u.setdefault("badges", [])
+            u["badges"].append(badge_id)
             unlocked.append(badge_id)
     if unlocked:
-        save_user(bot, user_id, user)
-        # Send notification to all groups the user is in
+        save_json(bot, config.GROUP_DATA_FILE, data)
         badge_names = [config.ACHIEVEMENTS[b]["icon"] + " " + config.ACHIEVEMENTS[b]["name"] for b in unlocked]
-        groups = get_all_groups()
-        for gid in groups:
-            try:
-                bot.send_message(gid, f"🏅 *ACHIEVEMENT UNLOCKED!*\n\n{username} unlocked: {', '.join(badge_names)}!", parse_mode="Markdown")
-            except Exception:
-                pass
+        bot.send_message(chat_id, f"🏅 *ACHIEVEMENT UNLOCKED!*\n\n{username} unlocked: {', '.join(badge_names)}!", parse_mode="Markdown")
     return unlocked
 
 # ---------------------------------------------------------------------------
-# MUTE MANAGEMENT (Global)
+# MUTE MANAGEMENT
 # ---------------------------------------------------------------------------
 
 def load_mutes():
@@ -451,21 +340,20 @@ def mark_broadcast_sent(bot, index):
         save_broadcasts(bot, data)
 
 # ---------------------------------------------------------------------------
-# LEADERBOARD (Global)
+# LEADERBOARD (Per Group)
 # ---------------------------------------------------------------------------
 
-def get_leaderboard(chat_id=None, mode="monthly", top_n=10):
-    """
-    mode: 'monthly' | 'yearly' | 'alltime'
-    Returns list of (rank, username, points, streak, title) sorted by points desc.
-    chat_id is now optional – leaderboard is global.
-    """
-    data = load_json(config.USER_DATA_FILE, {})
+def get_leaderboard(chat_id, mode="monthly", top_n=10):
+    data = load_json(config.GROUP_DATA_FILE, {})
+    chat_str = str(chat_id)
+    if chat_str not in data:
+        return []
+
     month_key = _now_month_key()
     year_key = _now_year_key()
     results = []
 
-    for user_id, u in data.items():
+    for user_str, u in data[chat_str].items():
         if mode == "monthly":
             pts = u.get("monthly_points", {}).get(month_key, 0)
         elif mode == "yearly":
@@ -491,62 +379,64 @@ def _get_active_title(u):
     return None
 
 # ---------------------------------------------------------------------------
-# SHOP (Global)
+# SHOP
 # ---------------------------------------------------------------------------
 
 def purchase_item(bot, chat_id, user_id, username, item_id):
-    track_group(chat_id)
-    add_member_to_group(chat_id, user_id, username)
-    user = get_user(user_id, username)
+    data = load_json(config.GROUP_DATA_FILE, {})
+    chat_str = str(chat_id)
+    user_str = str(user_id)
+    u = get_user(data, chat_str, user_str, username)
 
     if item_id in config.POWERUPS:
         powerup = config.POWERUPS[item_id]
-        if user["points"] < powerup["cost"]:
-            return False, f"Not enough points. You need {powerup['cost']} but have {user['points']}."
-        user["points"] -= powerup["cost"]
-        user.setdefault("powerups", {})
-        user["powerups"][item_id] = user["powerups"].get(item_id, 0) + 1
-        save_user(bot, user_id, user)
+        if u["points"] < powerup["cost"]:
+            return False, f"Not enough points. You need {powerup['cost']} but have {u['points']}."
+        u["points"] -= powerup["cost"]
+        u.setdefault("powerups", {})
+        u["powerups"][item_id] = u["powerups"].get(item_id, 0) + 1
+        save_json(bot, config.GROUP_DATA_FILE, data)
         return True, f"✅ Purchased *{powerup['emoji']} {powerup['name']}* for {powerup['cost']} points!"
 
     item = next((i for i in config.SHOP_TITLES if i["id"] == item_id), None)
     if not item:
         return False, "Item not found."
 
-    if user["points"] < item["cost"]:
-        return False, f"Not enough points. You need {item['cost']} but have {user['points']}."
+    if u["points"] < item["cost"]:
+        return False, f"Not enough points. You need {item['cost']} but have {u['points']}."
 
-    user["points"] -= item["cost"]
+    u["points"] -= item["cost"]
 
     if item_id == "hint_tokens":
-        user["hint_tokens"] = user.get("hint_tokens", 0) + 3
+        u["hint_tokens"] = u.get("hint_tokens", 0) + 3
     elif item_id == "double_xp":
-        user["double_xp_until"] = time.time() + 3600
+        u["double_xp_until"] = time.time() + 3600
     elif item_id == "mystery_box":
         import random
         prize = random.randint(10, 200)
-        user["points"] += prize
-        save_user(bot, user_id, user)
+        u["points"] += prize
+        save_json(bot, config.GROUP_DATA_FILE, data)
         return True, f"🎁 Mystery Box opened! You won *{prize} points*!"
     else:
-        user["title"] = item["name"]
-        user["title_expires"] = time.time() + (config.SHOP_TITLE_DURATION_DAYS * 86400)
+        u["title"] = item["name"]
+        u["title_expires"] = time.time() + (config.SHOP_TITLE_DURATION_DAYS * 86400)
 
-    save_user(bot, user_id, user)
+    save_json(bot, config.GROUP_DATA_FILE, data)
     return True, f"✅ Purchased *{item['name']}* for {item['cost']} points!"
 
 def use_hint_token(bot, chat_id, user_id, username):
-    track_group(chat_id)
-    add_member_to_group(chat_id, user_id, username)
-    user = get_user(user_id, username)
-    if user.get("hint_tokens", 0) > 0:
-        user["hint_tokens"] -= 1
-        save_user(bot, user_id, user)
+    data = load_json(config.GROUP_DATA_FILE, {})
+    chat_str = str(chat_id)
+    user_str = str(user_id)
+    u = get_user(data, chat_str, user_str, username)
+    if u.get("hint_tokens", 0) > 0:
+        u["hint_tokens"] -= 1
+        save_json(bot, config.GROUP_DATA_FILE, data)
         return True
     return False
 
 # ---------------------------------------------------------------------------
-# MONTHLY RESET
+# MONTHLY RESET (Per Group)
 # ---------------------------------------------------------------------------
 
 def check_and_run_monthly_reset(bot):
@@ -558,34 +448,31 @@ def check_and_run_monthly_reset(bot):
     if last == curr:
         return
 
-    data = load_json(config.USER_DATA_FILE, {})
+    data = load_json(config.GROUP_DATA_FILE, {})
     prev_month = (now.replace(day=1) - datetime.timedelta(days=1)).strftime("%Y-%m")
 
-    scores = []
-    for user_id, u in data.items():
-        pts = u.get("monthly_points", {}).get(prev_month, 0)
-        if pts > 0:
-            scores.append((u.get("username", "Player"), pts, user_id))
-    scores.sort(key=lambda x: x[1], reverse=True)
-
-    if scores:
-        winner_name, winner_pts, winner_id = scores[0]
-        msg = (
-            f"🏆 *Monthly Results — {prev_month}*\n\n"
-            f"👑 Champion: *{winner_name}* with *{winner_pts} points*!\n\n"
-            f"Top 3:\n"
-        )
-        for i, (name, pts, _) in enumerate(scores[:3], 1):
-            medal = ["🥇", "🥈", "🥉"][i - 1]
-            msg += f"{medal} {name} — {pts} pts\n"
-        msg += "\nMonthly scores have been reset. New month, new battle! 🔥"
-
-        groups = get_all_groups()
-        for gid in groups:
+    for chat_str, users in data.items():
+        scores = []
+        for user_str, u in users.items():
+            pts = u.get("monthly_points", {}).get(prev_month, 0)
+            if pts > 0:
+                scores.append((u.get("username", "Player"), pts))
+        scores.sort(key=lambda x: x[1], reverse=True)
+        if scores:
+            winner_name, winner_pts = scores[0]
+            msg = (
+                f"🏆 *Monthly Results — {prev_month}*\n\n"
+                f"👑 Champion: *{winner_name}* with *{winner_pts} points*!\n\n"
+                f"Top 3:\n"
+            )
+            for i, (name, pts) in enumerate(scores[:3], 1):
+                medal = ["🥇", "🥈", "🥉"][i - 1]
+                msg += f"{medal} {name} — {pts} pts\n"
+            msg += "\nMonthly scores have been reset. New month, new battle! 🔥"
             try:
-                bot.send_message(gid, msg, parse_mode="Markdown")
+                bot.send_message(int(chat_str), msg, parse_mode="Markdown")
             except Exception as e:
-                print(f"Monthly reset announcement failed for {gid}: {e}")
+                print(f"Monthly reset announcement failed for {chat_str}: {e}")
 
     state["last_monthly_reset"] = curr
     save_json(bot, config.STATE_FILE, state)
@@ -602,29 +489,27 @@ def check_and_run_yearly_reset(bot):
     if now.month != 1 or now.day != 1:
         return
 
-    data = load_json(config.USER_DATA_FILE, {})
+    data = load_json(config.GROUP_DATA_FILE, {})
     prev_year = str(now.year - 1)
 
-    scores = []
-    for user_id, u in data.items():
-        pts = u.get("yearly_points", {}).get(prev_year, 0)
-        if pts > 0:
-            scores.append((u.get("username", "Player"), pts, user_id))
-    scores.sort(key=lambda x: x[1], reverse=True)
-
-    if scores:
-        winner_name, winner_pts, winner_id = scores[0]
-        msg = (
-            f"🎊 *Yearly Champion — {prev_year}*\n\n"
-            f"👑 *{winner_name}* dominated the year with *{winner_pts} points*!\n\n"
-            f"Happy New Year! {now.year} begins now — make it count! 🚀"
-        )
-        groups = get_all_groups()
-        for gid in groups:
+    for chat_str, users in data.items():
+        scores = []
+        for user_str, u in users.items():
+            pts = u.get("yearly_points", {}).get(prev_year, 0)
+            if pts > 0:
+                scores.append((u.get("username", "Player"), pts))
+        scores.sort(key=lambda x: x[1], reverse=True)
+        if scores:
+            winner_name, winner_pts = scores[0]
+            msg = (
+                f"🎊 *Yearly Champion — {prev_year}*\n\n"
+                f"👑 *{winner_name}* dominated the year with *{winner_pts} points*!\n\n"
+                f"Happy New Year! {now.year} begins now — make it count! 🚀"
+            )
             try:
-                bot.send_message(gid, msg, parse_mode="Markdown")
+                bot.send_message(int(chat_str), msg, parse_mode="Markdown")
             except Exception as e:
-                print(f"Yearly reset announcement failed for {gid}: {e}")
+                print(f"Yearly reset announcement failed for {chat_str}: {e}")
 
     state["last_yearly_reset"] = curr
     save_json(bot, config.STATE_FILE, state)
