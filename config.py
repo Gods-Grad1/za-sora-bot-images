@@ -1,562 +1,226 @@
-import os
-import json
-import time
-import csv
-import datetime
-import requests
-import config
+# ============================================================
+# ZA SORA BOT — MASTER CONFIGURATION
+# ============================================================
 
-CSV_DATA_CACHE = {}
+# --- CORE API & SECURITY ---
+API_TOKEN   = "8359703884:AAE5UTOPcRzwHVwLVSXNSWovrnGwNAWrxr8"
+ADMIN_ID    = 8234402535
 
-# ---------------------------------------------------------------------------
-# CORE UTILITIES
-# ---------------------------------------------------------------------------
+# --- GOOGLE SHEETS ---
+CURRENT_TABLE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSh6Ulx9_QZOrrAFNA4l1zj3Gv16HCpLilwhudvSJu4zUeMEoQDn5MM7UFe4c2hoUVSr0JYdNOggi-_/pub?gid=0&single=true&output=csv"
+FIXTURES_CSV_URL      = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSh6Ulx9_QZOrrAFNA4l1zj3Gv16HCpLilwhudvSJu4zUeMEoQDn5MM7UFe4c2hoUVSr0JYdNOggi-_/pub?gid=745306980&single=true&output=csv"
 
-def log_error_to_admin(bot, context, exception):
-    error_msg = f"⚠️ *BOT ERROR*\n📌 Context: {context}\n💥 `{str(exception)}`"
-    print(error_msg)
-    try:
-        bot.send_message(config.ADMIN_ID, error_msg, parse_mode="Markdown")
-    except Exception as e:
-        print(f"Failed to alert admin: {e}")
+# --- GITHUB IMAGE BACKUP ---
+GITHUB_RAW_BASE_URL = "https://raw.githubusercontent.com/Gods-Grad1/za-sora-bot/main/images/"
 
-def load_json(filepath, default_value):
-    if not os.path.exists(filepath):
-        with open(filepath, "w") as f:
-            json.dump(default_value, f, indent=4)
-    with open(filepath, "r") as f:
-        return json.load(f)
+# --- GITHUB API (for uploading images) ---
+GITHUB_TOKEN = "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"
+GITHUB_REPO = "Gods-Grad1/za-sora-bot"
+GITHUB_BRANCH = "main"
 
-def save_json(bot, filepath, data):
-    tmp_file = filepath + ".tmp"
-    try:
-        with open(tmp_file, "w") as f:
-            json.dump(data, f, indent=4, ensure_ascii=False)
-        os.replace(tmp_file, filepath)
-    except Exception as e:
-        log_error_to_admin(bot, "Atomic Save Fault", e)
+# --- DATABASE FILE PATHS ---
+GROUP_DATA_FILE   = "group_data.json"
+GROUPS_FILE       = "groups_db.txt"
+STATE_FILE        = "bot_state.json"
+CHAR_DB           = "characters_db.json"
+MEDIA_DB          = "media_db.json"
+QUOTES_FILE       = "quotes.json"
+TRIVIA_DB         = "trivia_db.json"
+SCHEDULER_FILE    = "scheduler.json"
+SHOP_FILE         = "shop.json"
+LEADERBOARD_FILE  = "leaderboard_history.json"
+VERSUS_FILE       = "versus_state.json"
+DAILY_FILE        = "daily_challenge.json"
+MUTE_FILE         = "muted_users.json"
+BROADCAST_FILE    = "broadcasts.json"
 
-def fetch_csv_cached(bot, url, duration=300):
-    now = time.time()
-    if url in CSV_DATA_CACHE:
-        timestamp, data = CSV_DATA_CACHE[url]
-        if now - timestamp < duration:
-            return data
-    try:
-        response = requests.get(url, timeout=10, proxies={})
-        response.encoding = 'utf-8'
-        lines = response.text.splitlines()
-        rows = list(csv.reader(lines))
-        CSV_DATA_CACHE[url] = (now, rows)
-        return rows
-    except Exception as e:
-        log_error_to_admin(bot, "CSV Fetch Error", e)
-        if url in CSV_DATA_CACHE:
-            return CSV_DATA_CACHE[url][1]
-        return []
+# --- IMAGE DIRECTORIES (ephemeral cache) ---
+IMAGE_CACHE_DIR        = "game_image_cache"
+LOCAL_CHAR_IMAGES_DIR  = "local_images/characters"
+LOCAL_MEDIA_IMAGES_DIR = "local_images/media"
 
-# ---------------------------------------------------------------------------
-# GROUP DATA HELPERS
-# ---------------------------------------------------------------------------
+# --- TIMEZONE ---
+TIMEZONE         = "Africa/Johannesburg"   # UTC+2
+MORNING_MSG_HOUR = 8
+MORNING_MSG_MIN  = 0
+DAILY_CHALLENGE_HOUR = 14
+DAILY_CHALLENGE_MIN  = 0
+SCHEDULER_WINDOW_START = 18
+SCHEDULER_WINDOW_END   = 23
 
-def _now_month_key():
-    return datetime.datetime.now().strftime("%Y-%m")
+# --- POINTS ECONOMY ---
+POINTS_CHARACTER_GAME  = 50
+POINTS_YEAR_GAME       = 50
+POINTS_TRIVIA          = 75
+POINTS_VERSUS_WIN      = 100
+POINTS_DAILY_CHALLENGE = 150
+POINTS_HINT_PENALTY    = 15
+POINTS_HINT_MAX        = 3
 
-def _now_year_key():
-    return str(datetime.datetime.now().year)
+# --- STREAK MULTIPLIERS ---
+STREAK_MULTIPLIERS = {
+    0:  1.0,
+    3:  2.0,
+    5:  3.0,
+    10: 5.0,
+}
 
-def get_user(data, chat_str, user_str, username):
-    """Ensures user entry exists with all required fields in a group."""
-    if chat_str not in data:
-        data[chat_str] = {}
-    if user_str not in data[chat_str]:
-        data[chat_str][user_str] = {
-            "username":        username or "Player",
-            "points":          0,
-            "monthly_points":  {},
-            "yearly_points":   {},
-            "alltime_points":  0,
-            "streak":          0,
-            "best_streak":     0,
-            "games_played":    0,
-            "correct":         0,
-            "title":           None,
-            "title_expires":   None,
-            "hint_tokens":     0,
-            "double_xp_until": None,
-            "last_spin":       0,
-            "badges":          [],
-            "trivia_correct":  0,
-            "versus_wins":     0,
-            "daily_wins":      0,
-            "powerups":        {},
-        }
-    u = data[chat_str][user_str]
-    defaults = {
-        "monthly_points": {}, "yearly_points": {}, "alltime_points": 0,
-        "streak": 0, "best_streak": 0, "games_played": 0, "correct": 0,
-        "title": None, "title_expires": None, "hint_tokens": 0,
-        "double_xp_until": None, "last_spin": 0, "badges": [],
-        "trivia_correct": 0, "versus_wins": 0, "daily_wins": 0,
-        "powerups": {},
-    }
-    for k, v in defaults.items():
-        if k not in u:
-            u[k] = v
-    if username:
-        u["username"] = username
-    return u
+# --- VERSUS MODE ---
+VERSUS_ACCEPT_TIMEOUT  = 60
+VERSUS_QUESTION_TIME   = 30
+VERSUS_BET_WINDOW      = 30
+VERSUS_MAX_BET         = 20
 
-def track_member(bot, chat_id, user_id, username):
-    """Tracks a member in a group."""
-    data = load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    user_str = str(user_id)
-    get_user(data, chat_str, user_str, username)
-    save_json(bot, config.GROUP_DATA_FILE, data)
+# --- TAG ALL ---
+TAGALL_COOLDOWN_HOURS  = 6
 
-def get_all_members(chat_id):
-    """Returns list of (user_id, username) for all tracked members in a group."""
-    data = load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    if chat_str not in data:
-        return []
-    return [(int(uid), u.get("username", "Player"))
-            for uid, u in data[chat_str].items()]
+# --- SCHEDULER ---
+SCHEDULE_INTERVALS = [30, 60, 120, 240, 360]
 
-def get_all_groups():
-    try:
-        data = load_json(config.GROUP_DATA_FILE, {})
-        return [int(cid) for cid in data.keys()]
-    except Exception:
-        return []
+# --- SHOP ---
+SHOP_TITLE_DURATION_DAYS = 30
 
-# ---------------------------------------------------------------------------
-# POINTS & STREAKS
-# ---------------------------------------------------------------------------
-
-def get_streak_multiplier(streak):
-    multiplier = 1.0
-    for threshold, mult in sorted(config.STREAK_MULTIPLIERS.items(), reverse=True):
-        if streak >= threshold:
-            multiplier = mult
-            break
-    return multiplier
-
-def reward_user(bot, chat_id, user_id, username, amount=50):
-    data = load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    user_str = str(user_id)
-    u = get_user(data, chat_str, user_str, username)
-
-    u["streak"] += 1
-    u["correct"] += 1
-    if u["streak"] > u["best_streak"]:
-        u["best_streak"] = u["streak"]
-
-    multiplier = get_streak_multiplier(u["streak"])
-    if u.get("double_xp_until") and time.time() < u["double_xp_until"]:
-        multiplier *= 2
-
-    final = int(amount * multiplier)
-
-    month_key = _now_month_key()
-    year_key = _now_year_key()
-    u["points"] += final
-    u["alltime_points"] += final
-    u["monthly_points"][month_key] = u["monthly_points"].get(month_key, 0) + final
-    u["yearly_points"][year_key] = u["yearly_points"].get(year_key, 0) + final
-    u["games_played"] += 1
-
-    save_json(bot, config.GROUP_DATA_FILE, data)
-    check_achievements(bot, chat_id, user_id, username)
-    return u["points"], u["streak"], multiplier, final
-
-def penalise_wrong(bot, chat_id, user_id, username):
-    data = load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    user_str = str(user_id)
-    u = get_user(data, chat_str, user_str, username)
-    u["streak"] = 0
-    u["games_played"] += 1
-    save_json(bot, config.GROUP_DATA_FILE, data)
-
-def deduct_points(bot, chat_id, user_id, username, amount):
-    data = load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    user_str = str(user_id)
-    u = get_user(data, chat_str, user_str, username)
-    u["points"] = max(0, u["points"] - amount)
-    save_json(bot, config.GROUP_DATA_FILE, data)
-    return u["points"]
-
-# ---------------------------------------------------------------------------
-# POWER-UPS
-# ---------------------------------------------------------------------------
-
-def use_powerup(bot, chat_id, user_id, username, powerup_id):
-    data = load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    user_str = str(user_id)
-    u = get_user(data, chat_str, user_str, username)
-    if u.get("powerups", {}).get(powerup_id, 0) > 0:
-        u["powerups"][powerup_id] -= 1
-        save_json(bot, config.GROUP_DATA_FILE, data)
-        return True
-    return False
-
-def add_powerup(bot, chat_id, user_id, username, powerup_id, count=1):
-    data = load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    user_str = str(user_id)
-    u = get_user(data, chat_str, user_str, username)
-    u.setdefault("powerups", {})
-    u["powerups"][powerup_id] = u["powerups"].get(powerup_id, 0) + count
-    save_json(bot, config.GROUP_DATA_FILE, data)
-
-# ---------------------------------------------------------------------------
-# ACHIEVEMENTS / BADGES
-# ---------------------------------------------------------------------------
-
-def unlock_badge(bot, chat_id, user_id, username, badge_id):
-    data = load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    user_str = str(user_id)
-    u = get_user(data, chat_str, user_str, username)
-    if badge_id not in u.get("badges", []):
-        u.setdefault("badges", [])
-        u["badges"].append(badge_id)
-        save_json(bot, config.GROUP_DATA_FILE, data)
-        return True
-    return False
-
-def check_achievements(bot, chat_id, user_id, username):
-    data = load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    user_str = str(user_id)
-    u = get_user(data, chat_str, user_str, username)
-    unlocked = []
-    for badge_id, badge_data in config.ACHIEVEMENTS.items():
-        if badge_id in u.get("badges", []):
-            continue
-        condition = badge_data.get("condition", {})
-        meets_condition = True
-        for key, required in condition.items():
-            if u.get(key, 0) < required:
-                meets_condition = False
-                break
-        if meets_condition:
-            u.setdefault("badges", [])
-            u["badges"].append(badge_id)
-            unlocked.append(badge_id)
-    if unlocked:
-        save_json(bot, config.GROUP_DATA_FILE, data)
-        badge_names = [config.ACHIEVEMENTS[b]["icon"] + " " + config.ACHIEVEMENTS[b]["name"] for b in unlocked]
-        bot.send_message(chat_id, f"🏅 *ACHIEVEMENT UNLOCKED!*\n\n{username} unlocked: {', '.join(badge_names)}!", parse_mode="Markdown")
-    return unlocked
-
-# ---------------------------------------------------------------------------
-# MUTE MANAGEMENT
-# ---------------------------------------------------------------------------
-
-def load_mutes():
-    return load_json(config.MUTE_FILE, {})
-
-def save_mutes(bot, data):
-    save_json(bot, config.MUTE_FILE, data)
-
-def mute_user(bot, chat_id, user_id, username, duration_seconds):
-    data = load_mutes()
-    key = f"{chat_id}_{user_id}"
-    data[key] = {
-        "username": username,
-        "expires": time.time() + duration_seconds,
-        "chat_id": chat_id,
-        "user_id": user_id,
-    }
-    save_mutes(bot, data)
-
-def unmute_user(bot, chat_id, user_id):
-    data = load_mutes()
-    key = f"{chat_id}_{user_id}"
-    if key in data:
-        del data[key]
-        save_mutes(bot, data)
-        return True
-    return False
-
-def is_muted(chat_id, user_id):
-    data = load_mutes()
-    key = f"{chat_id}_{user_id}"
-    if key not in data:
-        return False
-    if time.time() > data[key]["expires"]:
-        del data[key]
-        return False
-    return True
-
-def cleanup_expired_mutes(bot):
-    data = load_mutes()
-    changed = False
-    now = time.time()
-    for key, value in list(data.items()):
-        if now > value["expires"]:
-            del data[key]
-            changed = True
-    if changed:
-        save_mutes(bot, data)
-
-# ---------------------------------------------------------------------------
-# BROADCAST MANAGEMENT
-# ---------------------------------------------------------------------------
-
-def load_broadcasts():
-    return load_json(config.BROADCAST_FILE, [])
-
-def save_broadcasts(bot, data):
-    save_json(bot, config.BROADCAST_FILE, data)
-
-def add_broadcast(bot, chat_id, message, send_time):
-    data = load_broadcasts()
-    data.append({
-        "chat_id": chat_id,
-        "message": message,
-        "send_time": send_time,
-        "sent": False,
-    })
-    save_broadcasts(bot, data)
-    return len(data) - 1
-
-def get_pending_broadcasts():
-    data = load_broadcasts()
-    now = time.time()
-    pending = [b for b in data if not b.get("sent", False) and b["send_time"] <= now]
-    return pending
-
-def mark_broadcast_sent(bot, index):
-    data = load_broadcasts()
-    if index < len(data):
-        data[index]["sent"] = True
-        save_broadcasts(bot, data)
-
-# ---------------------------------------------------------------------------
-# LEADERBOARD (Per Group)
-# ---------------------------------------------------------------------------
-
-def get_leaderboard(chat_id, mode="monthly", top_n=10):
-    data = load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    if chat_str not in data:
-        return []
-
-    month_key = _now_month_key()
-    year_key = _now_year_key()
-    results = []
-
-    for user_str, u in data[chat_str].items():
-        if mode == "monthly":
-            pts = u.get("monthly_points", {}).get(month_key, 0)
-        elif mode == "yearly":
-            pts = u.get("yearly_points", {}).get(year_key, 0)
-        else:
-            pts = u.get("alltime_points", 0)
-        results.append({
-            "username": u.get("username", "Player"),
-            "points": pts,
-            "streak": u.get("streak", 0),
-            "title": _get_active_title(u),
-        })
-
-    results.sort(key=lambda x: x["points"], reverse=True)
-    return [(i + 1, r["username"], r["points"], r["streak"], r["title"])
-            for i, r in enumerate(results[:top_n])]
-
-def _get_active_title(u):
-    title = u.get("title")
-    expires = u.get("title_expires")
-    if title and expires and time.time() < expires:
-        return title
-    return None
-
-# ---------------------------------------------------------------------------
-# SHOP
-# ---------------------------------------------------------------------------
-
-def purchase_item(bot, chat_id, user_id, username, item_id):
-    data = load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    user_str = str(user_id)
-    u = get_user(data, chat_str, user_str, username)
-
-    if item_id in config.POWERUPS:
-        powerup = config.POWERUPS[item_id]
-        if u["points"] < powerup["cost"]:
-            return False, f"Not enough points. You need {powerup['cost']} but have {u['points']}."
-        u["points"] -= powerup["cost"]
-        u.setdefault("powerups", {})
-        u["powerups"][item_id] = u["powerups"].get(item_id, 0) + 1
-        save_json(bot, config.GROUP_DATA_FILE, data)
-        return True, f"✅ Purchased *{powerup['emoji']} {powerup['name']}* for {powerup['cost']} points!"
-
-    item = next((i for i in config.SHOP_TITLES if i["id"] == item_id), None)
-    if not item:
-        return False, "Item not found."
-
-    if u["points"] < item["cost"]:
-        return False, f"Not enough points. You need {item['cost']} but have {u['points']}."
-
-    u["points"] -= item["cost"]
-
-    if item_id == "hint_tokens":
-        u["hint_tokens"] = u.get("hint_tokens", 0) + 3
-    elif item_id == "double_xp":
-        u["double_xp_until"] = time.time() + 3600
-    elif item_id == "mystery_box":
-        import random
-        prize = random.randint(10, 200)
-        u["points"] += prize
-        save_json(bot, config.GROUP_DATA_FILE, data)
-        return True, f"🎁 Mystery Box opened! You won *{prize} points*!"
-    else:
-        u["title"] = item["name"]
-        u["title_expires"] = time.time() + (config.SHOP_TITLE_DURATION_DAYS * 86400)
-       
 # --- AUTO-DELETE ---
 AUTO_DELETE_DELAY = 300   # seconds (5 minutes)
 
-    save_json(bot, config.GROUP_DATA_FILE, data)
-    return True, f"✅ Purchased *{item['name']}* for {item['cost']} points!"
+# --- DESIGN PALETTE ---
+THEME_BG            = "#0d0d0f"
+THEME_BG_GRADIENT   = "#1a1a1f"
+THEME_HEADER_BG     = "#111116"
+THEME_UPCOMING_BG   = "#0f1a2e"
+THEME_COMPLETED_BG  = "#0a1f14"
+THEME_TEXT_PRIMARY  = "#ffffff"
+THEME_TEXT_MUTED    = "#5c5c61"
+THEME_TEXT_DIM      = "#3a3a3f"
+THEME_ACCENT        = "#00E676"
+THEME_ACCENT_GOLD   = "#FFD700"
+THEME_ACCENT_SILVER = "#C0C0C0"
+THEME_ACCENT_BRONZE = "#CD7F32"
+THEME_ACCENT_RED    = "#FF1744"
+THEME_ACCENT_AMBER  = "#FFB300"
+THEME_ACCENT_BLUE   = "#0a84ff"
+THEME_ACCENT_PURPLE = "#BF5FFF"
+THEME_LINE          = "#1e1e24"
+THEME_CARD_BG       = "#16161b"
+THEME_ROW_GOLD      = "#2a2200"
+THEME_ROW_SILVER    = "#1e1e1e"
+THEME_ROW_BRONZE    = "#1f1200"
 
-def use_hint_token(bot, chat_id, user_id, username):
-    data = load_json(config.GROUP_DATA_FILE, {})
-    chat_str = str(chat_id)
-    user_str = str(user_id)
-    u = get_user(data, chat_str, user_str, username)
-    if u.get("hint_tokens", 0) > 0:
-        u["hint_tokens"] -= 1
-        save_json(bot, config.GROUP_DATA_FILE, data)
-        return True
-    return False
+# --- SPLIT DATABASE FILE PATHS ---
+MEDIA_DB          = "media_db.json"
+ANIME_SERIES_DB   = "anime_series_db.json"
+ANIME_FILMS_DB    = "anime_films_db.json"
+ANIMATION_DB      = "animation_db.json"
+MEDIA_ALL_DBS     = ["media_db.json", "anime_series_db.json", "anime_films_db.json", "animation_db.json"]
 
-# ---------------------------------------------------------------------------
-# MONTHLY RESET (Per Group)
-# ---------------------------------------------------------------------------
+CHAR_DB              = "characters_anime_db.json"
+CHAR_ANIME_DB        = "characters_anime_db.json"
+CHAR_DC_DB           = "characters_dc_db.json"
+CHAR_MARVEL_DB       = "characters_marvel_db.json"
+CHAR_GAMING_DB       = "characters_gaming_db.json"
+CHAR_ALL_DBS         = ["characters_anime_db.json", "characters_dc_db.json", "characters_marvel_db.json", "characters_gaming_db.json"]
 
-def check_and_run_monthly_reset(bot):
-    state = load_json(config.STATE_FILE, {})
-    now = datetime.datetime.now()
-    last = state.get("last_monthly_reset", "")
-    curr = now.strftime("%Y-%m")
+TRIVIA_CATEGORIES = ["Gaming", "Anime", "Movies", "General", "Food", "Sports", "Technology", "Bible"]
 
-    if last == curr:
-        return
+YEAR_CATEGORIES = {
+    "movies":       "media_db.json",
+    "anime_series": "anime_series_db.json",
+    "anime_films":  "anime_films_db.json",
+    "animation":    "animation_db.json",
+}
 
-    data = load_json(config.GROUP_DATA_FILE, {})
-    prev_month = (now.replace(day=1) - datetime.timedelta(days=1)).strftime("%Y-%m")
+CHAR_CATEGORIES = {
+    "anime":   "characters_anime_db.json",
+    "dc":      "characters_dc_db.json",
+    "marvel":  "characters_marvel_db.json",
+    "gaming":  "characters_gaming_db.json",
+}
 
-    for chat_str, users in data.items():
-        scores = []
-        for user_str, u in users.items():
-            pts = u.get("monthly_points", {}).get(prev_month, 0)
-            if pts > 0:
-                scores.append((u.get("username", "Player"), pts))
-        scores.sort(key=lambda x: x[1], reverse=True)
-        if scores:
-            winner_name, winner_pts = scores[0]
-            msg = (
-                f"🏆 *Monthly Results — {prev_month}*\n\n"
-                f"👑 Champion: *{winner_name}* with *{winner_pts} points*!\n\n"
-                f"Top 3:\n"
-            )
-            for i, (name, pts) in enumerate(scores[:3], 1):
-                medal = ["🥇", "🥈", "🥉"][i - 1]
-                msg += f"{medal} {name} — {pts} pts\n"
-            msg += "\nMonthly scores have been reset. New month, new battle! 🔥"
-            try:
-                bot.send_message(int(chat_str), msg, parse_mode="Markdown")
-            except Exception as e:
-                print(f"Monthly reset announcement failed for {chat_str}: {e}")
+DEFAULT_ANSWER_TIME = 60
 
-    state["last_monthly_reset"] = curr
-    save_json(bot, config.STATE_FILE, state)
+# --- WELCOME MESSAGE (Luffy Style) ---
+WELCOME_MSG = (
+    "☠️ *KONO BOT WA!* ☠️\n\n"
+    "Ore wa Monkey D. Luffy! Kaizoku-ou ni naru otoko da! 🏴‍☠️\n\n"
+    "This isn't just a bot — it's our Nakama! A place where we\n"
+    "sail together, challenge each other, and become stronger!\n\n"
+    "🏆 *Our Dream:* To build the greatest crew of gamers,\n"
+    "where everyone earns their place through skill and guts!\n\n"
+    "⚔️ Ready to join the adventure? Type /help and let's go!\n\n"
+    "*ZAAA SORAAA!* 🌊🔥"
+)
 
-def check_and_run_yearly_reset(bot):
-    state = load_json(config.STATE_FILE, {})
-    now = datetime.datetime.now()
-    curr = now.strftime("%Y")
-    last = state.get("last_yearly_reset", "")
+# ============================================================
+# NEW FEATURES CONFIGURATION
+# ============================================================
 
-    if last == curr:
-        return
+# --- POWER-UPS ---
+POWERUPS = {
+    "fifty_fifty": {
+        "name": "50/50",
+        "cost": 100,
+        "emoji": "✂️",
+        "description": "Removes two wrong answers in trivia."
+    },
+    "streak_freeze": {
+        "name": "Streak Freeze",
+        "cost": 200,
+        "emoji": "🧊",
+        "description": "Your streak won't break on one wrong answer."
+    },
+    "double_down": {
+        "name": "Double Down",
+        "cost": 150,
+        "emoji": "⬆️",
+        "description": "Double points on next correct (but double loss on wrong)."
+    },
+}
 
-    if now.month != 1 or now.day != 1:
-        return
+# --- SHOP TITLES (includes power-ups) ---
+SHOP_TITLES = [
+    {"id": "quiz_master",   "name": "🏆 Quiz Master",     "cost": 200},
+    {"id": "on_fire",       "name": "🔥 On Fire",         "cost": 150},
+    {"id": "game_god",      "name": "🎮 Game God",        "cost": 300},
+    {"id": "bible_scholar", "name": "📖 Bible Scholar",   "cost": 200},
+    {"id": "anime_king",    "name": "👑 Anime King",      "cost": 200},
+    {"id": "movie_buff",    "name": "🎬 Movie Buff",      "cost": 150},
+    {"id": "the_goat",      "name": "🐐 The GOAT",        "cost": 500},
+    {"id": "night_owl",     "name": "🦉 Night Owl",       "cost": 150},
+    {"id": "lightning",     "name": "⚡ Lightning",       "cost": 200},
+    {"id": "chosen_one",    "name": "✨ The Chosen One",  "cost": 400},
+    {"id": "grinder",       "name": "💪 The Grinder",     "cost": 150},
+    {"id": "legend",        "name": "🌟 Legend",          "cost": 350},
+    {"id": "mystery_box",   "name": "🎁 Mystery Box",     "cost": 75},
+    {"id": "double_xp",     "name": "⚡ Double XP (1hr)", "cost": 150},
+    {"id": "hint_tokens",   "name": "💡 Hint Tokens x3",  "cost": 100},
+    {"id": "fifty_fifty",   "name": "✂️ 50/50",           "cost": 100},
+    {"id": "streak_freeze", "name": "🧊 Streak Freeze",   "cost": 200},
+    {"id": "double_down",   "name": "⬆️ Double Down",     "cost": 150},
+]
 
-    data = load_json(config.GROUP_DATA_FILE, {})
-    prev_year = str(now.year - 1)
+# --- WHEEL OF FORTUNE (Balanced) ---
+WHEEL_SLOTS = [
+    {"name": "50 pts", "points": 50, "weight": 10},
+    {"name": "30 pts", "points": 30, "weight": 15},
+    {"name": "20 pts", "points": 20, "weight": 15},
+    {"name": "Hint Token x2", "hint_token": 2, "weight": 5},
+    {"name": "Double XP (1h)", "double_xp": 3600, "weight": 5},
+    {"name": "-5 pts", "points": -5, "weight": 15},
+    {"name": "-10 pts", "points": -10, "weight": 15},
+    {"name": "-20 pts", "points": -20, "weight": 8},
+    {"name": "Bankrupt!", "bankrupt": True, "weight": 5},
+    {"name": "Nothing!", "points": 0, "weight": 7},
+]
 
-    for chat_str, users in data.items():
-        scores = []
-        for user_str, u in users.items():
-            pts = u.get("yearly_points", {}).get(prev_year, 0)
-            if pts > 0:
-                scores.append((u.get("username", "Player"), pts))
-        scores.sort(key=lambda x: x[1], reverse=True)
-        if scores:
-            winner_name, winner_pts = scores[0]
-            msg = (
-                f"🎊 *Yearly Champion — {prev_year}*\n\n"
-                f"👑 *{winner_name}* dominated the year with *{winner_pts} points*!\n\n"
-                f"Happy New Year! {now.year} begins now — make it count! 🚀"
-            )
-            try:
-                bot.send_message(int(chat_str), msg, parse_mode="Markdown")
-            except Exception as e:
-                print(f"Yearly reset announcement failed for {chat_str}: {e}")
-
-    state["last_yearly_reset"] = curr
-    save_json(bot, config.STATE_FILE, state)
-
-# ---------------------------------------------------------------------------
-# QUOTES
-# ---------------------------------------------------------------------------
-
-def load_quotes():
-    return load_json(config.QUOTES_FILE, [])
-
-def save_quotes(bot, quotes):
-    save_json(bot, config.QUOTES_FILE, quotes)
-
-def add_quote(bot, text, author="CHJN"):
-    quotes = load_quotes()
-    next_id = max((q["id"] for q in quotes), default=0) + 1
-    quotes.append({"id": next_id, "text": text, "author": author})
-    save_quotes(bot, quotes)
-    return next_id
-
-def delete_quote(bot, quote_id):
-    quotes = load_quotes()
-    before = len(quotes)
-    quotes = [q for q in quotes if q["id"] != quote_id]
-    if len(quotes) == before:
-        return False
-    save_quotes(bot, quotes)
-    return True
-
-def edit_quote(bot, quote_id, new_text):
-    quotes = load_quotes()
-    for q in quotes:
-        if q["id"] == quote_id:
-            q["text"] = new_text
-            save_quotes(bot, quotes)
-            return True
-    return False
-
-def get_quote(quote_id):
-    quotes = load_quotes()
-    return next((q for q in quotes if q["id"] == quote_id), None)
-
-def get_random_quote():
-    import random
-    quotes = load_quotes()
-    return random.choice(quotes) if quotes else None
+# --- ACHIEVEMENTS / BADGES ---
+ACHIEVEMENTS = {
+    "first_blood": {"name": "First Blood", "icon": "🩸", "description": "First correct answer", "condition": {"correct": 1}},
+    "streak_5": {"name": "Streak 5", "icon": "🔥", "description": "5 correct in a row", "condition": {"best_streak": 5}},
+    "streak_10": {"name": "Streak 10", "icon": "🔥🔥", "description": "10 correct in a row", "condition": {"best_streak": 10}},
+    "streak_25": {"name": "Streak 25", "icon": "⭐", "description": "25 correct in a row", "condition": {"best_streak": 25}},
+    "centurion": {"name": "Centurion", "icon": "💯", "description": "100 correct answers", "condition": {"correct": 100}},
+    "trivia_king": {"name": "Trivia King", "icon": "👑", "description": "50 trivia correct", "condition": {"trivia_correct": 50}},
+    "versus_win": {"name": "Versus Champ", "icon": "⚔️", "description": "5 versus wins", "condition": {"versus_wins": 5}},
+    "daily_champ": {"name": "Daily Champ", "icon": "🌞", "description": "10 daily challenge wins", "condition": {"daily_wins": 10}},
+    "quiz_master": {"name": "Quiz Master", "icon": "📚", "description": "200 total correct", "condition": {"correct": 200}},
+}
