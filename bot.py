@@ -160,7 +160,8 @@ def _get_help_text(category):
             "/rebuildcache — Rebuild image cache\n"
             "/testmorning — Test morning message\n"
             "/status — Bot status\n"
-            "/listbroadcasts — List scheduled broadcasts"
+            "/listbroadcasts — List scheduled broadcasts\n"
+            "/forcebroadcast — Force-send all pending broadcasts"
         ),
     }
     return texts.get(category, "Unknown category.")
@@ -660,6 +661,29 @@ def handle_all_messages(message):
     elif cmd == '/status':
         if is_admin(user_id):
             handle_status(message)
+        else:
+            bot.reply_to(message, "❌ Admin only.")
+
+    elif cmd == '/forcebroadcast':
+        if is_admin(user_id):
+            bot.reply_to(message, "📤 Force-sending all pending broadcasts...")
+            pending = database.get_pending_broadcasts()
+            if not pending:
+                bot.reply_to(message, "📭 No pending broadcasts.")
+                return
+            count = 0
+            for broadcast in pending:
+                try:
+                    bot.send_message(broadcast["chat_id"], broadcast["message"], parse_mode="Markdown")
+                    all_broadcasts = database.load_broadcasts()
+                    for i, b in enumerate(all_broadcasts):
+                        if b.get("sent") == False and b.get("send_time") == broadcast["send_time"]:
+                            database.mark_broadcast_sent(bot, i)
+                            count += 1
+                            break
+                except Exception as e:
+                    print(f"Force broadcast failed: {e}")
+            bot.reply_to(message, f"✅ Force-sent {count} broadcast(s).")
         else:
             bot.reply_to(message, "❌ Admin only.")
 
@@ -1230,7 +1254,10 @@ def handle_all_callbacks(call):
 
         if data == "help_main":
             # Check if already on main menu
-            if last_menu_state.get(chat_id) == "main":
+            current_state = last_menu_state.get(chat_id)
+            if current_state == "main" or current_state is None:
+                # If state is None, assume we're on main and reset it
+                last_menu_state[chat_id] = "main"
                 bot.answer_callback_query(call.id, "Already on main menu.")
                 return
             text = "📖 *ZA SORA GAME CLUB — HELP*\n\nChoose a category below:"
@@ -1469,7 +1496,7 @@ def background_scheduler():
                 database.check_and_run_yearly_reset(bot)
                 time.sleep(61)
 
-            # Broadcast scheduler
+            # Broadcast scheduler with debug logging
             pending = database.get_pending_broadcasts()
             if pending:
                 print(f"📢 Found {len(pending)} pending broadcasts")
@@ -1732,6 +1759,7 @@ def register_commands():
         telebot.types.BotCommand("testmorning",  "🧪 Test morning message"),
         telebot.types.BotCommand("status",       "🤖 Bot status"),
         telebot.types.BotCommand("listbroadcasts","📋 List scheduled broadcasts"),
+        telebot.types.BotCommand("forcebroadcast","📤 Force-send all pending broadcasts"),
         telebot.types.BotCommand("addquote",     "➕ Add a quote (DM only)"),
         telebot.types.BotCommand("listquotes",   "📝 List all quotes (DM only)"),
         telebot.types.BotCommand("editquote",    "✏️ Edit a quote (DM only)"),
