@@ -1252,20 +1252,20 @@ def handle_all_callbacks(call):
             bot.answer_callback_query(call.id)
             return
 
-if data == "help_main":
-    main_text = "📖 *ZA SORA GAME CLUB — HELP*\n\nChoose a category below:"
-    current_text = call.message.text
-    # If already on main, don't edit
-    if current_text == main_text:
-        bot.answer_callback_query(call.id, "Already on main menu.")
-        return
-    # Always go back to main
-    markup = _build_help_menu()
-    bot.edit_message_text(main_text, chat_id, call.message.message_id,
-                          reply_markup=markup, parse_mode="Markdown")
-    last_menu_state[chat_id] = "main"
-    bot.answer_callback_query(call.id)
-    return
+        if data == "help_main":
+            main_text = "📖 *ZA SORA GAME CLUB — HELP*\n\nChoose a category below:"
+            current_text = call.message.text
+            # If already on main, don't edit
+            if current_text == main_text:
+                bot.answer_callback_query(call.id, "Already on main menu.")
+                return
+            # Always go back to main
+            markup = _build_help_menu()
+            bot.edit_message_text(main_text, chat_id, call.message.message_id,
+                                  reply_markup=markup, parse_mode="Markdown")
+            last_menu_state[chat_id] = "main"
+            bot.answer_callback_query(call.id)
+            return
 
         if data == "fix_back":
             current_text = call.message.text
@@ -1495,7 +1495,7 @@ def background_scheduler():
                 database.check_and_run_yearly_reset(bot)
                 time.sleep(61)
 
-            # Broadcast scheduler with debug logging
+            # Broadcast scheduler
             pending = database.get_pending_broadcasts()
             if pending:
                 print(f"📢 Found {len(pending)} pending broadcasts")
