@@ -169,6 +169,7 @@ def reward_user(bot, chat_id, user_id, username, amount=50):
     u["games_played"] += 1
 
     save_json(bot, config.GROUP_DATA_FILE, data)
+    # Check achievements after saving
     check_achievements(bot, chat_id, user_id, username)
     return u["points"], u["streak"], multiplier, final
 
@@ -215,7 +216,7 @@ def add_powerup(bot, chat_id, user_id, username, powerup_id, count=1):
     save_json(bot, config.GROUP_DATA_FILE, data)
 
 # ---------------------------------------------------------------------------
-# ACHIEVEMENTS / BADGES
+# ACHIEVEMENTS / BADGES (Fixed)
 # ---------------------------------------------------------------------------
 
 def unlock_badge(bot, chat_id, user_id, username, badge_id):
@@ -236,12 +237,14 @@ def check_achievements(bot, chat_id, user_id, username):
     user_str = str(user_id)
     u = get_user(data, chat_str, user_str, username)
     unlocked = []
+    print(f"[ACHIEVEMENTS] Checking for {username}: stats: correct={u.get('correct',0)}, best_streak={u.get('best_streak',0)}, trivia_correct={u.get('trivia_correct',0)}, versus_wins={u.get('versus_wins',0)}, daily_wins={u.get('daily_wins',0)}")
     for badge_id, badge_data in config.ACHIEVEMENTS.items():
         if badge_id in u.get("badges", []):
             continue
         condition = badge_data.get("condition", {})
         meets_condition = True
         for key, required in condition.items():
+            # Ensure the user has the required stat
             if u.get(key, 0) < required:
                 meets_condition = False
                 break
@@ -249,6 +252,7 @@ def check_achievements(bot, chat_id, user_id, username):
             u.setdefault("badges", [])
             u["badges"].append(badge_id)
             unlocked.append(badge_id)
+            print(f"[ACHIEVEMENTS] Unlocked {badge_id} for {username}")
     if unlocked:
         save_json(bot, config.GROUP_DATA_FILE, data)
         badge_names = [config.ACHIEVEMENTS[b]["icon"] + " " + config.ACHIEVEMENTS[b]["name"] for b in unlocked]
