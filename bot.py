@@ -1,11 +1,12 @@
 import os
 import time
 import datetime
-from datetime import timezone
+from datetime import timezone, timedelta
 import threading
 import telebot
 from telebot import apihelper
 from telebot.types import InputMediaPhoto
+from telebot.apihelper import ApiTelegramException
 import config
 import database
 import graphics
@@ -781,18 +782,19 @@ def handle_all_messages(message):
         bot.reply_to(message, f"✅ Test broadcast sent to {count} groups.")
 
     elif cmd == '/forcebroadcast' and is_admin(user_id):
-        bot.reply_to(message, "📤 Force-sending all pending broadcasts...")
-        pending = database.get_pending_broadcasts()
+        bot.reply_to(message, "📤 Force-sending all unsent broadcasts...")
+        all_broadcasts = database.load_broadcasts()
+        pending = [b for b in all_broadcasts if not b.get("sent", False)]
         if not pending:
-            bot.reply_to(message, "📭 No pending broadcasts.")
+            bot.reply_to(message, "📭 No unsent broadcasts.")
             return
         count = 0
         for broadcast in pending:
             try:
                 bot.send_message(broadcast["chat_id"], broadcast["message"], parse_mode="Markdown")
-                all_broadcasts = database.load_broadcasts()
+                # Mark as sent
                 for i, b in enumerate(all_broadcasts):
-                    if b.get("sent") == False and b.get("send_time") == broadcast["send_time"]:
+                    if b.get("send_time") == broadcast["send_time"] and b.get("message") == broadcast["message"]:
                         database.mark_broadcast_sent(bot, i)
                         break
                 count += 1
@@ -860,8 +862,11 @@ def handle_all_messages(message):
                                   "Example: /broadcast 2024-12-25 08:00 Merry Christmas everyone!")
             return
         time_str = args[0] + " " + args[1]
+        # Parse time as UTC+2 (South Africa)
+        tz = timezone(timedelta(hours=2))
         try:
-            send_time = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M").timestamp()
+            dt = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M").replace(tzinfo=tz)
+            send_time = dt.timestamp()  # converts to UTC timestamp
         except ValueError:
             bot.reply_to(message, "❌ Invalid time format. Use: YYYY-MM-DD HH:MM")
             return
@@ -1237,32 +1242,31 @@ def handle_all_callbacks(call):
             bot.answer_callback_query(call.id)
             return
 
-        # ── Help menu with state tracking ──────────────────────────────────
+        # ── Help menu ──────────────────────────────────────────────────────
         if data.startswith("help_"):
             category = data.replace("help_", "")
-            # Update state
-            last_menu_state[chat_id] = category
             text = _get_help_text(category)
-            markup = telebot.types.InlineKeyboardMarkup()
-            markup.add(telebot.types.InlineKeyboardButton("🔙 Back", callback_data="help_main"))
-            bot.edit_message_text(text, chat_id, call.message.message_id,
-                                  reply_markup=markup, parse_mode="Markdown")
+            # No back button – just show the text
+            try:
+                bot.edit_message_text(text, chat_id, call.message.message_id, parse_mode="Markdown")
+            except ApiTelegramException as e:
+                if "message is not modified" in str(e):
+                    bot.answer_callback_query(call.id, "Already on this page.")
+                    return
+                raise
             bot.answer_callback_query(call.id)
             return
 
         if data == "help_main":
-            # Force state to "main" if not set
-            if last_menu_state.get(chat_id) is None:
-                last_menu_state[chat_id] = "main"
-            # Check if already on main
-            if last_menu_state.get(chat_id) == "main":
+            # Use content check to avoid "message not modified"
+            current_text = call.message.text
+            if current_text == "📖 *ZA SORA GAME CLUB — HELP*\n\nChoose a category below:":
                 bot.answer_callback_query(call.id, "Already on main menu.")
                 return
             text = "📖 *ZA SORA GAME CLUB — HELP*\n\nChoose a category below:"
             markup = _build_help_menu()
             bot.edit_message_text(text, chat_id, call.message.message_id,
                                   reply_markup=markup, parse_mode="Markdown")
-            last_menu_state[chat_id] = "main"
             bot.answer_callback_query(call.id)
             return
 
@@ -1799,7 +1803,6 @@ def register_commands():
 
 def show_help(message):
     chat_id = message.chat.id
-    last_menu_state[chat_id] = "main"  # set initial state
     text = "📖 *ZA SORA GAME CLUB — HELP*\n\nChoose a category below:"
     markup = _build_help_menu()
     bot.send_message(chat_id, text, reply_markup=markup, parse_mode="Markdown")
