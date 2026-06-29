@@ -169,7 +169,6 @@ def reward_user(bot, chat_id, user_id, username, amount=50):
     u["games_played"] += 1
 
     save_json(bot, config.GROUP_DATA_FILE, data)
-    # Check achievements after saving
     check_achievements(bot, chat_id, user_id, username)
     return u["points"], u["streak"], multiplier, final
 
@@ -216,7 +215,7 @@ def add_powerup(bot, chat_id, user_id, username, powerup_id, count=1):
     save_json(bot, config.GROUP_DATA_FILE, data)
 
 # ---------------------------------------------------------------------------
-# ACHIEVEMENTS / BADGES (Fixed)
+# ACHIEVEMENTS / BADGES
 # ---------------------------------------------------------------------------
 
 def unlock_badge(bot, chat_id, user_id, username, badge_id):
@@ -244,7 +243,6 @@ def check_achievements(bot, chat_id, user_id, username):
         condition = badge_data.get("condition", {})
         meets_condition = True
         for key, required in condition.items():
-            # Ensure the user has the required stat
             if u.get(key, 0) < required:
                 meets_condition = False
                 break
@@ -311,7 +309,7 @@ def cleanup_expired_mutes(bot):
         save_mutes(bot, data)
 
 # ---------------------------------------------------------------------------
-# BROADCAST MANAGEMENT
+# BROADCAST MANAGEMENT (WITH DEBUG LOGGING)
 # ---------------------------------------------------------------------------
 
 def load_broadcasts():
@@ -332,9 +330,27 @@ def add_broadcast(bot, chat_id, message, send_time):
     return len(data) - 1
 
 def get_pending_broadcasts():
+    """Returns all unsent broadcasts that are due, with debug logging."""
     data = load_broadcasts()
     now = time.time()
-    pending = [b for b in data if not b.get("sent", False) and b["send_time"] <= now]
+    print(f"🔍 [BROADCAST DEBUG] Checking for pending broadcasts. Current time: {datetime.datetime.fromtimestamp(now).strftime('%Y-%m-%d %H:%M:%S')} (timestamp: {now})")
+    pending = []
+    for idx, b in enumerate(data):
+        if not b.get("sent", False):
+            send_time = b["send_time"]
+            send_time_str = datetime.datetime.fromtimestamp(send_time).strftime('%Y-%m-%d %H:%M:%S')
+            print(f"  ➡️ Broadcast #{idx}: scheduled for {send_time_str} (timestamp: {send_time})")
+            if send_time <= now:
+                pending.append(b)
+                print(f"  ✅ PENDING (due)")
+            else:
+                print(f"  ⏳ Not due yet")
+        else:
+            print(f"  ➡️ Broadcast #{idx}: already sent")
+    if pending:
+        print(f"📢 Found {len(pending)} pending broadcast(s)")
+    else:
+        print("📭 No pending broadcasts")
     return pending
 
 def mark_broadcast_sent(bot, index):
