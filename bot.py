@@ -1252,21 +1252,20 @@ def handle_all_callbacks(call):
             bot.answer_callback_query(call.id)
             return
 
-        if data == "help_main":
-            # Check if already on main menu
-            current_state = last_menu_state.get(chat_id)
-            if current_state == "main" or current_state is None:
-                # If state is None, assume we're on main and reset it
-                last_menu_state[chat_id] = "main"
-                bot.answer_callback_query(call.id, "Already on main menu.")
-                return
-            text = "📖 *ZA SORA GAME CLUB — HELP*\n\nChoose a category below:"
-            markup = _build_help_menu()
-            bot.edit_message_text(text, chat_id, call.message.message_id,
-                                  reply_markup=markup, parse_mode="Markdown")
-            last_menu_state[chat_id] = "main"
-            bot.answer_callback_query(call.id)
-            return
+if data == "help_main":
+    main_text = "📖 *ZA SORA GAME CLUB — HELP*\n\nChoose a category below:"
+    current_text = call.message.text
+    # If already on main, don't edit
+    if current_text == main_text:
+        bot.answer_callback_query(call.id, "Already on main menu.")
+        return
+    # Always go back to main
+    markup = _build_help_menu()
+    bot.edit_message_text(main_text, chat_id, call.message.message_id,
+                          reply_markup=markup, parse_mode="Markdown")
+    last_menu_state[chat_id] = "main"
+    bot.answer_callback_query(call.id)
+    return
 
         if data == "fix_back":
             current_text = call.message.text
