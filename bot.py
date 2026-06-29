@@ -159,7 +159,8 @@ def _get_help_text(category):
             "/testbroadcast — Test broadcast system\n"
             "/rebuildcache — Rebuild image cache\n"
             "/testmorning — Test morning message\n"
-            "/status — Bot status"
+            "/status — Bot status\n"
+            "/listbroadcasts — List scheduled broadcasts"
         ),
     }
     return texts.get(category, "Unknown category.")
@@ -1438,6 +1439,7 @@ def background_scheduler():
                 time.sleep(61)
 
             if now.weekday() == 0 and hour == 9 and minute == 0:
+                print("📊 Sending weekly recap...")
                 send_weekly_recap(bot)
                 time.sleep(61)
 
@@ -1830,6 +1832,44 @@ def show_my_stats(message, target_id=None, target_name=None):
         bot.send_message(chat_id, text, parse_mode="Markdown")
 
 # ---------------------------------------------------------------------------
+# STARTUP FALLBACKS
+# ---------------------------------------------------------------------------
+
+def check_startup_fallbacks():
+    """Runs once on startup to check if any scheduled tasks were missed."""
+    print("🔍 Checking startup fallbacks...")
+    now = local_now()
+    hour = now.hour
+    minute = now.minute
+    weekday = now.weekday()
+
+    # Check if we missed today's morning message (if it's after 8:00 AM)
+    if hour >= config.MORNING_MSG_HOUR:
+        print("🌅 Sending morning message (startup fallback)...")
+        send_morning_message(bot)
+
+    # Check if it's Monday and we're past 9:00 AM
+    if weekday == 0 and hour >= 9:
+        print("📊 Sending weekly recap (startup fallback)...")
+        send_weekly_recap(bot)
+
+    # Check for any pending broadcasts
+    pending = database.get_pending_broadcasts()
+    if pending:
+        print(f"📢 Found {len(pending)} pending broadcasts on startup")
+        for broadcast in pending:
+            try:
+                print(f"➡️ Sending to {broadcast['chat_id']}: {broadcast['message'][:30]}")
+                bot.send_message(broadcast["chat_id"], broadcast["message"], parse_mode="Markdown")
+                all_broadcasts = database.load_broadcasts()
+                for i, b in enumerate(all_broadcasts):
+                    if b.get("sent") == False and b.get("send_time") == broadcast["send_time"]:
+                        database.mark_broadcast_sent(bot, i)
+                        break
+            except Exception as e:
+                print(f"Broadcast failed on startup: {e}")
+
+# ---------------------------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------------------------
 
@@ -1840,6 +1880,8 @@ if __name__ == "__main__":
     threading.Thread(target=graphics.clear_and_rebuild_disk_cache, args=(bot,), daemon=True).start()
     database.check_and_run_monthly_reset(bot)
     database.cleanup_expired_mutes(bot)
+    # Run startup fallbacks (morning message, weekly recap, broadcasts)
+    check_startup_fallbacks()
     threading.Thread(target=background_scheduler, daemon=True).start()
     threading.Thread(target=notify_missing_images, daemon=True).start()
     print("✅ Bot is live!")
