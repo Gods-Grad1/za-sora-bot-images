@@ -72,7 +72,7 @@ def schedule_delete(chat_id, message_id, delay=config.AUTO_DELETE_DELAY):
     timer.daemon = True
     timer.start()
 
-# Menu state tracking for "Back" button
+# Menu state tracking for "Back" button (used to prevent double-back)
 last_menu_state = {}  # chat_id -> "main" | "games" | "rankings" | "shop" | "info" | "admin"
 
 # Safe edit tracking – stores last message text per (chat_id, message_id)
@@ -98,7 +98,6 @@ def safe_edit_message(chat_id, message_id, text, reply_markup=None, parse_mode="
 
 def safe_edit_message_media(chat_id, message_id, media, reply_markup=None):
     """Edits a media message only if content differs."""
-    # For media, we can't easily compare, so we just try and catch
     try:
         bot.edit_message_media(chat_id=chat_id, message_id=message_id,
                               media=media, reply_markup=reply_markup)
@@ -1271,7 +1270,10 @@ def handle_all_callbacks(call):
         if data.startswith("help_"):
             category = data.replace("help_", "")
             text = _get_help_text(category)
-            safe_edit_message(chat_id, call.message.message_id, text, parse_mode="Markdown")
+            markup = telebot.types.InlineKeyboardMarkup()
+            markup.add(telebot.types.InlineKeyboardButton("🔙 Back", callback_data="help_main"))
+            safe_edit_message(chat_id, call.message.message_id, text,
+                              reply_markup=markup, parse_mode="Markdown")
             bot.answer_callback_query(call.id)
             return
 
