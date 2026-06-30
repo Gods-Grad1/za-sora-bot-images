@@ -72,14 +72,13 @@ def schedule_delete(chat_id, message_id, delay=config.AUTO_DELETE_DELAY):
     timer.daemon = True
     timer.start()
 
-# Safe edit without cache – always attempts edit
 def safe_edit_message(chat_id, message_id, text, reply_markup=None, parse_mode="Markdown"):
+    """Edit message – if it fails, just ignore (no error shown)."""
     try:
         bot.edit_message_text(text, chat_id, message_id,
                               reply_markup=reply_markup, parse_mode=parse_mode)
     except ApiTelegramException as e:
         if "message is not modified" in str(e):
-            # Ignore – the user will get a callback response elsewhere
             return
         raise
 
@@ -554,6 +553,32 @@ def send_morning_message(bot):
             print(f"❌ Morning message failed for {group_id}: {e}")
 
 # ---------------------------------------------------------------------------
+# BROADCAST HELPERS
+# ---------------------------------------------------------------------------
+
+def _send_pending_broadcasts(bot):
+    """Sends all pending broadcasts immediately."""
+    pending = database.get_pending_broadcasts()
+    if not pending:
+        return
+    print(f"📢 [BROADCAST] Sending {len(pending)} pending broadcasts...")
+    for broadcast in pending:
+        try:
+            if broadcast["chat_id"] is None:
+                groups = database.get_all_groups()
+                for gid in groups:
+                    try:
+                        bot.send_message(gid, broadcast["message"], parse_mode="Markdown")
+                    except Exception as e:
+                        print(f"❌ [BROADCAST] Failed to send to {gid}: {e}")
+            else:
+                bot.send_message(broadcast["chat_id"], broadcast["message"], parse_mode="Markdown")
+            database.mark_broadcast_sent(bot, broadcast["id"])
+            print(f"✅ [BROADCAST] Sent (ID {broadcast['id']})")
+        except Exception as e:
+            print(f"❌ [BROADCAST] Failed: {e}")
+
+# ---------------------------------------------------------------------------
 # COMMAND ROUTER
 # ---------------------------------------------------------------------------
 
@@ -755,11 +780,8 @@ def handle_all_messages(message):
 
     elif cmd == '/checknow' and is_admin(user_id):
         bot.reply_to(message, "🔄 Manually checking for pending broadcasts...")
-        pending = database.get_pending_broadcasts()
-        if pending:
-            bot.reply_to(message, f"📢 Found {len(pending)} pending broadcasts. They will be sent shortly.")
-        else:
-            bot.reply_to(message, "📭 No pending broadcasts.")
+        _send_pending_broadcasts(bot)
+        bot.reply_to(message, "✅ Broadcast check completed.")
         return
 
     elif cmd == '/listbroadcasts' and is_admin(user_id):
@@ -795,27 +817,9 @@ def handle_all_messages(message):
 
     elif cmd == '/forcebroadcast' and is_admin(user_id):
         bot.reply_to(message, "📤 Force-sending all unsent broadcasts...")
-        pending = database.get_pending_broadcasts()
-        if not pending:
-            bot.reply_to(message, "📭 No unsent broadcasts.")
-            return
-        count = 0
-        for broadcast in pending:
-            try:
-                if broadcast["chat_id"] is None:
-                    groups = database.get_all_groups()
-                    for gid in groups:
-                        try:
-                            bot.send_message(gid, broadcast["message"], parse_mode="Markdown")
-                        except Exception as e:
-                            print(f"❌ [FORCE] Failed to send to {gid}: {e}")
-                else:
-                    bot.send_message(broadcast["chat_id"], broadcast["message"], parse_mode="Markdown")
-                database.mark_broadcast_sent(bot, broadcast["id"])
-                count += 1
-            except Exception as e:
-                print(f"Force broadcast failed: {e}")
-        bot.reply_to(message, f"✅ Force-sent {count} broadcasts.")
+        _send_pending_broadcasts(bot)
+        bot.reply_to(message, "✅ Force-send completed.")
+        return
 
     elif cmd == '/rebuildcache' and is_admin(user_id):
         bot.reply_to(message, "🔄 Rebuilding image cache...")
@@ -891,9 +895,14 @@ def handle_all_messages(message):
         if not message_text:
             bot.reply_to(message, "❌ Please provide a message.")
             return
-        # Global broadcast (send to all groups)
+        # Save as global broadcast
         database.add_broadcast(bot, None, message_text, send_time)
         bot.reply_to(message, f"✅ Global broadcast scheduled for {time_str}.")
+        # If the send_time is within the next 10 seconds, send it now
+        if send_time - time.time() <= 10:
+            bot.reply_to(message, "📤 Sending broadcast now (within 10 seconds)...")
+            _send_pending_broadcasts(bot)
+        return
 
     elif cmd == '/addquote' and chat_id == user_id and is_admin(user_id):
         if not args:
@@ -1265,10 +1274,14 @@ def handle_all_callbacks(call):
             return
 
         if data == "help_main":
+            # Delete old message and send fresh main menu
+            try:
+                bot.delete_message(chat_id, call.message.message_id)
+            except Exception:
+                pass
             text = "📖 *ZA SORA GAME CLUB — HELP*\n\nChoose a category below:"
             markup = _build_help_menu()
-            safe_edit_message(chat_id, call.message.message_id, text,
-                              reply_markup=markup, parse_mode="Markdown")
+            bot.send_message(chat_id, text, reply_markup=markup, parse_mode="Markdown")
             bot.answer_callback_query(call.id)
             return
 
@@ -1450,39 +1463,18 @@ def _serve_fixtures_page(chat_id, message_id, player, context, status, page):
 # BROADCAST CHECKER (Dedicated Thread)
 # ---------------------------------------------------------------------------
 
-broadcast_checker_thread = None  # Will be set in main
+broadcast_checker_thread = None
 
 def broadcast_checker():
-    """Dedicated thread that checks for pending broadcasts every 10 seconds."""
+    """Dedicated thread that checks for pending broadcasts every 5 seconds."""
     print("📢 Broadcast checker thread started!")
     while True:
         try:
-            pending = database.get_pending_broadcasts()
-            if pending:
-                print(f"📢 [BROADCAST] Found {len(pending)} pending broadcasts")
-                for broadcast in pending:
-                    dt = datetime.datetime.fromtimestamp(broadcast["send_time"]).strftime("%Y-%m-%d %H:%M")
-                    print(f"📢 [BROADCAST] Sending: {broadcast['message'][:30]}... (scheduled for {dt})")
-                    try:
-                        if broadcast["chat_id"] is None:
-                            # Global broadcast – send to all groups
-                            groups = database.get_all_groups()
-                            for gid in groups:
-                                try:
-                                    bot.send_message(gid, broadcast["message"], parse_mode="Markdown")
-                                except Exception as e:
-                                    print(f"❌ [BROADCAST] Failed to send to {gid}: {e}")
-                        else:
-                            bot.send_message(broadcast["chat_id"], broadcast["message"], parse_mode="Markdown")
-                        database.mark_broadcast_sent(bot, broadcast["id"])
-                        print(f"✅ [BROADCAST] Sent (ID {broadcast['id']})")
-                    except Exception as e:
-                        print(f"❌ [BROADCAST] Failed: {e}")
-            # Check every 10 seconds
-            time.sleep(10)
+            _send_pending_broadcasts(bot)
+            time.sleep(5)
         except Exception as e:
             print(f"❌ [BROADCAST] Checker error: {e}")
-            time.sleep(10)
+            time.sleep(5)
 
 # ---------------------------------------------------------------------------
 # BACKGROUND SCHEDULER THREAD
@@ -1890,20 +1882,7 @@ def check_startup_fallbacks():
         print("📊 Sending weekly recap (startup fallback)...")
         send_weekly_recap(bot)
 
-    pending = database.get_pending_broadcasts()
-    if pending:
-        print(f"📢 Found {len(pending)} pending broadcasts on startup")
-        for broadcast in pending:
-            try:
-                if broadcast["chat_id"] is None:
-                    groups = database.get_all_groups()
-                    for gid in groups:
-                        bot.send_message(gid, broadcast["message"], parse_mode="Markdown")
-                else:
-                    bot.send_message(broadcast["chat_id"], broadcast["message"], parse_mode="Markdown")
-                database.mark_broadcast_sent(bot, broadcast["id"])
-            except Exception as e:
-                print(f"Broadcast failed on startup: {e}")
+    _send_pending_broadcasts(bot)
 
 # ---------------------------------------------------------------------------
 # MAIN
