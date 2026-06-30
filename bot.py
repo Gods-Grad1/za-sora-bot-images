@@ -573,7 +573,7 @@ def send_morning_message(bot):
         database.log_error_to_admin(bot, "Morning Message Overall", e)
 
 # ---------------------------------------------------------------------------
-# BROADCAST HELPERS (UPDATED WITH VERBOSE LOGGING)
+# BROADCAST HELPERS (with verbose logging)
 # ---------------------------------------------------------------------------
 
 def _send_pending_broadcasts(bot):
@@ -997,7 +997,7 @@ def handle_all_messages(message):
         show_schedule_panel(chat_id)
 
 # ---------------------------------------------------------------------------
-# STATUS COMMAND
+# STATUS COMMAND (includes thread health and pending count)
 # ---------------------------------------------------------------------------
 
 def handle_status(message):
@@ -1323,7 +1323,7 @@ def handle_all_callbacks(call):
             bot.answer_callback_query(call.id)
             return
 
-        # ── Help menu (exact match first, then prefix) ──────────────
+        # ── Help menu (exact match first) ──────────────────────────────
         if data == "help_main":
             text = "📖 *ZA SORA GAME CLUB — HELP*\n\nChoose a category below:"
             markup = _build_help_menu()
@@ -1517,114 +1517,168 @@ def _serve_fixtures_page(chat_id, message_id, player, context, status, page):
             img.close()
 
 # ---------------------------------------------------------------------------
-# BROADCAST CHECKER (with heartbeat)
+# BROADCAST CHECKER (with top-level safety)
 # ---------------------------------------------------------------------------
 
 broadcast_checker_thread = None
 
 def broadcast_checker():
-    """Dedicated thread that checks for pending broadcasts every 5 seconds."""
-    print("📢 Broadcast checker thread started!")
-    while True:
-        print("⏳ Broadcast check loop tick")
-        try:
-            _send_pending_broadcasts(bot)
-        except Exception as e:
-            print(f"❌ [BROADCAST] Checker error: {e}")
-            database.log_error_to_admin(bot, "Broadcast Checker", e)
-        time.sleep(5)
+    try:
+        print("📢 Broadcast checker thread started!")
+        while True:
+            print("⏳ Broadcast check loop tick")
+            try:
+                _send_pending_broadcasts(bot)
+            except Exception as e:
+                print(f"❌ [BROADCAST] Checker error: {e}")
+                database.log_error_to_admin(bot, "Broadcast Checker", e)
+            time.sleep(5)
+    except Exception as fatal:
+        print(f"💥 Broadcast checker FATAL: {fatal}")
+        database.log_error_to_admin(bot, "Broadcast Checker FATAL", fatal)
 
 # ---------------------------------------------------------------------------
-# BACKGROUND SCHEDULER THREAD
+# BACKGROUND SCHEDULER (with top-level safety)
 # ---------------------------------------------------------------------------
 
 scheduler_thread = None
 
 def background_scheduler():
-    import random
-    print("⏰ Scheduler thread started!")
+    try:
+        import random
+        print("⏰ Scheduler thread started!")
+        while True:
+            try:
+                now   = local_now()
+                hour  = now.hour
+                minute = now.minute
+
+                sched = load_scheduler()
+
+                # Morning message
+                if hour == config.MORNING_MSG_HOUR and minute == config.MORNING_MSG_MIN:
+                    print("🌅 Sending morning message...")
+                    send_morning_message(bot)
+                    time.sleep(61)
+
+                # Weekly recap
+                if now.weekday() == 0 and hour == 9 and minute == 0:
+                    print("📊 Sending weekly recap...")
+                    send_weekly_recap(bot)
+                    time.sleep(61)
+
+                # Daily challenge
+                if hour == config.DAILY_CHALLENGE_HOUR and minute == config.DAILY_CHALLENGE_MIN:
+                    games.post_daily_challenge(bot)
+                    time.sleep(61)
+
+                # Sunday cache rebuild
+                if now.weekday() == 6 and hour == 0 and minute == 0:
+                    graphics.clear_and_rebuild_disk_cache(bot)
+                    time.sleep(61)
+
+                # Sunday standings broadcast
+                if now.weekday() == 6 and hour == 12 and minute == 0:
+                    groups  = database.get_all_groups()
+                    img_data = graphics.generate_table_image(bot)
+                    if img_data:
+                        for g_id in groups:
+                            try:
+                                img_data.seek(0)
+                                bot.send_photo(g_id, img_data, caption="📅 *SUNDAY STANDINGS*", parse_mode="Markdown")
+                            except Exception:
+                                pass
+                        if hasattr(img_data, 'close'): img_data.close()
+                    time.sleep(61)
+
+                # Monthly & yearly reset
+                if hour == 0 and minute == 1:
+                    database.check_and_run_monthly_reset(bot)
+                    database.check_and_run_yearly_reset(bot)
+                    time.sleep(61)
+
+                # Auto game scheduler
+                if sched.get("enabled"):
+                    window_start = sched.get("window_start", config.SCHEDULER_WINDOW_START)
+                    window_end   = sched.get("window_end",   config.SCHEDULER_WINDOW_END)
+                    in_window    = window_start <= hour < window_end
+                    interval_sec = sched.get("interval", 60) * 60
+                    last_game    = sched.get("last_game", 0)
+
+                    if in_window and (time.time() - last_game) >= interval_sec:
+                        game_type = sched.get("game_type", "random")
+                        if game_type == "random":
+                            game_type = random.choice(["character", "year", "picture", "trivia"])
+
+                        groups = database.get_all_groups()
+                        for g_id in groups:
+                            if games._is_game_active(g_id) or g_id in games.versus_games:
+                                continue
+                            if game_type == "character":
+                                games.start_character_game(bot, g_id)
+                            elif game_type == "year":
+                                games.start_year_game(bot, g_id)
+                            elif game_type == "picture":
+                                games.start_picture_game(bot, g_id)
+                            elif game_type == "trivia":
+                                games.start_trivia_game(bot, g_id)
+
+                        sched["last_game"] = time.time()
+                        save_scheduler(sched)
+
+            except Exception as e:
+                print(f"Scheduler error: {e}")
+                database.log_error_to_admin(bot, "Scheduler", e)
+
+            time.sleep(30)
+    except Exception as fatal:
+        print(f"💥 Scheduler FATAL: {fatal}")
+        database.log_error_to_admin(bot, "Scheduler FATAL", fatal)
+
+# ---------------------------------------------------------------------------
+# THREAD SUPERVISOR (restarts dead threads)
+# ---------------------------------------------------------------------------
+
+def start_broadcast_checker():
+    global broadcast_checker_thread
+    if broadcast_checker_thread and broadcast_checker_thread.is_alive():
+        return
+    print("🔄 Starting broadcast checker thread...")
+    broadcast_checker_thread = threading.Thread(target=broadcast_checker, daemon=True)
+    broadcast_checker_thread.start()
+
+def start_scheduler():
+    global scheduler_thread
+    if scheduler_thread and scheduler_thread.is_alive():
+        return
+    print("🔄 Starting scheduler thread...")
+    scheduler_thread = threading.Thread(target=background_scheduler, daemon=True)
+    scheduler_thread.start()
+
+def thread_supervisor():
+    """Monitors critical threads and restarts them if they die."""
     while True:
         try:
-            now   = local_now()
-            hour  = now.hour
-            minute = now.minute
+            # Broadcast checker
+            if not broadcast_checker_thread or not broadcast_checker_thread.is_alive():
+                print("⚠️ Broadcast checker thread is dead – restarting...")
+                start_broadcast_checker()
+                try:
+                    bot.send_message(config.ADMIN_ID, "⚠️ Broadcast checker thread restarted.", parse_mode=None)
+                except:
+                    pass
 
-            sched = load_scheduler()
-
-            # Morning message
-            if hour == config.MORNING_MSG_HOUR and minute == config.MORNING_MSG_MIN:
-                print("🌅 Sending morning message...")
-                send_morning_message(bot)
-                time.sleep(61)
-
-            # Weekly recap
-            if now.weekday() == 0 and hour == 9 and minute == 0:
-                print("📊 Sending weekly recap...")
-                send_weekly_recap(bot)
-                time.sleep(61)
-
-            # Daily challenge
-            if hour == config.DAILY_CHALLENGE_HOUR and minute == config.DAILY_CHALLENGE_MIN:
-                games.post_daily_challenge(bot)
-                time.sleep(61)
-
-            # Sunday cache rebuild
-            if now.weekday() == 6 and hour == 0 and minute == 0:
-                graphics.clear_and_rebuild_disk_cache(bot)
-                time.sleep(61)
-
-            # Sunday standings broadcast
-            if now.weekday() == 6 and hour == 12 and minute == 0:
-                groups  = database.get_all_groups()
-                img_data = graphics.generate_table_image(bot)
-                if img_data:
-                    for g_id in groups:
-                        try:
-                            img_data.seek(0)
-                            bot.send_photo(g_id, img_data, caption="📅 *SUNDAY STANDINGS*", parse_mode="Markdown")
-                        except Exception:
-                            pass
-                    if hasattr(img_data, 'close'): img_data.close()
-                time.sleep(61)
-
-            # Monthly & yearly reset
-            if hour == 0 and minute == 1:
-                database.check_and_run_monthly_reset(bot)
-                database.check_and_run_yearly_reset(bot)
-                time.sleep(61)
-
-            # Auto game scheduler
-            if sched.get("enabled"):
-                window_start = sched.get("window_start", config.SCHEDULER_WINDOW_START)
-                window_end   = sched.get("window_end",   config.SCHEDULER_WINDOW_END)
-                in_window    = window_start <= hour < window_end
-                interval_sec = sched.get("interval", 60) * 60
-                last_game    = sched.get("last_game", 0)
-
-                if in_window and (time.time() - last_game) >= interval_sec:
-                    game_type = sched.get("game_type", "random")
-                    if game_type == "random":
-                        game_type = random.choice(["character", "year", "picture", "trivia"])
-
-                    groups = database.get_all_groups()
-                    for g_id in groups:
-                        if games._is_game_active(g_id) or g_id in games.versus_games:
-                            continue
-                        if game_type == "character":
-                            games.start_character_game(bot, g_id)
-                        elif game_type == "year":
-                            games.start_year_game(bot, g_id)
-                        elif game_type == "picture":
-                            games.start_picture_game(bot, g_id)
-                        elif game_type == "trivia":
-                            games.start_trivia_game(bot, g_id)
-
-                    sched["last_game"] = time.time()
-                    save_scheduler(sched)
+            # Scheduler
+            if not scheduler_thread or not scheduler_thread.is_alive():
+                print("⚠️ Scheduler thread is dead – restarting...")
+                start_scheduler()
+                try:
+                    bot.send_message(config.ADMIN_ID, "⚠️ Scheduler thread restarted.", parse_mode=None)
+                except:
+                    pass
 
         except Exception as e:
-            print(f"Scheduler error: {e}")
-            database.log_error_to_admin(bot, "Scheduler", e)
+            print(f"Supervisor error: {e}")
 
         time.sleep(30)
 
@@ -1963,12 +2017,14 @@ if __name__ == "__main__":
     database.cleanup_expired_mutes(bot)
     check_startup_fallbacks()
 
-    broadcast_checker_thread = threading.Thread(target=broadcast_checker, daemon=True)
-    broadcast_checker_thread.start()
+    # Start the critical threads (they will be supervised)
+    start_broadcast_checker()
+    start_scheduler()
 
-    scheduler_thread = threading.Thread(target=background_scheduler, daemon=True)
-    scheduler_thread.start()
+    # Start the supervisor thread (daemon)
+    threading.Thread(target=thread_supervisor, daemon=True).start()
 
+    # Start non-critical threads
     threading.Thread(target=notify_missing_images, daemon=True).start()
 
     print("✅ Bot is live!")
