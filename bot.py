@@ -42,6 +42,7 @@ def load_scheduler():
         "last_game":  0,
         "tagall_last": 0,
         "last_morning_date": "",
+        "schedule_message_id": None,   # <-- track schedule panel message ID
     })
 
 def save_scheduler(data):
@@ -419,9 +420,16 @@ def show_admin_panel(message):
         reply_markup=markup, parse_mode="Markdown"
     )
 
-def show_schedule_panel(chat_id):
-    sched  = load_scheduler()
+# ---------------------------------------------------------------------------
+# SCHEDULE PANEL – BUILD & SHOW (Edit-in-place)
+# ---------------------------------------------------------------------------
+
+def _build_schedule_panel(chat_id):
+    """Builds the schedule panel text and markup – used for both sending and editing."""
+    sched = load_scheduler()
+    import telebot
     markup = telebot.types.InlineKeyboardMarkup(row_width=2)
+
     toggle_label = "❌ Disable" if sched.get("enabled") else "✅ Enable"
     markup.add(telebot.types.InlineKeyboardButton(toggle_label, callback_data="sched_toggle"))
     markup.add(*[
@@ -442,16 +450,43 @@ def show_schedule_panel(chat_id):
     markup.add(telebot.types.InlineKeyboardButton("🔙 Back", callback_data="admin_back"))
 
     status_icon = "✅" if sched.get("enabled") else "❌"
-    bot.send_message(
-        chat_id,
+    text = (
         f"📅 *SCHEDULE SETTINGS*\n\n"
         f"Status: {status_icon} {'ON' if sched.get('enabled') else 'OFF'}\n"
         f"Interval: every *{sched.get('interval', 60)} min*\n"
         f"Type: *{sched.get('game_type', 'random').title()}*\n"
         f"Window: *{sched.get('window_start',18)}:00 – {sched.get('window_end',23)}:00*\n"
-        f"⏰ Answer time limit: *{sched.get('answer_time_limit', 60)}s*",
-        reply_markup=markup, parse_mode="Markdown"
+        f"⏰ Answer time limit: *{sched.get('answer_time_limit', 60)}s*"
     )
+
+    return text, markup
+
+def show_schedule_panel(chat_id, edit_message_id=None):
+    """
+    Shows the schedule panel. If edit_message_id is provided, edits that message.
+    Otherwise, sends a new message and stores its ID.
+    """
+    sched = load_scheduler()
+    text, markup = _build_schedule_panel(chat_id)
+
+    if edit_message_id:
+        # Edit the existing message
+        try:
+            bot.edit_message_text(text, chat_id, edit_message_id,
+                                  reply_markup=markup, parse_mode="Markdown")
+            return
+        except Exception as e:
+            print(f"Failed to edit schedule panel: {e}")
+            # Fall through to send a new one
+
+    # Send new message and store its ID
+    msg = bot.send_message(chat_id, text, reply_markup=markup, parse_mode="Markdown")
+    sched["schedule_message_id"] = msg.message_id
+    save_scheduler(sched)
+
+# ---------------------------------------------------------------------------
+# STATS
+# ---------------------------------------------------------------------------
 
 def show_stats(chat_id):
     data = database.load_json(config.GROUP_DATA_FILE, {})
@@ -573,7 +608,7 @@ def send_morning_message(bot):
         database.log_error_to_admin(bot, "Morning Message Overall", e)
 
 # ---------------------------------------------------------------------------
-# BROADCAST HELPERS (with verbose logging)
+# BROADCAST HELPERS
 # ---------------------------------------------------------------------------
 
 def _send_pending_broadcasts(bot):
@@ -938,7 +973,7 @@ def handle_all_messages(message):
             _send_pending_broadcasts(bot)
         return
 
-    # --- Temporary debug commands ---
+    # --- Debug commands ---
     elif cmd == '/listpending' and is_admin(user_id):
         pending = database.get_pending_broadcasts()
         if not pending:
@@ -997,7 +1032,7 @@ def handle_all_messages(message):
         show_schedule_panel(chat_id)
 
 # ---------------------------------------------------------------------------
-# STATUS COMMAND (includes thread health and pending count)
+# STATUS COMMAND
 # ---------------------------------------------------------------------------
 
 def handle_status(message):
@@ -1263,16 +1298,25 @@ def handle_all_callbacks(call):
                 notify_missing_images()
                 bot.send_message(chat_id, "✅ Check complete. Admin has been notified.")
             elif action == "back":
-                bot.answer_callback_query(call.id)
-                try:
-                    bot.delete_message(chat_id, call.message.message_id)
-                except Exception:
-                    pass
+                # Delete the schedule message if it exists
+                sched = load_scheduler()
+                msg_id = sched.get("schedule_message_id")
+                if msg_id:
+                    try:
+                        bot.delete_message(chat_id, msg_id)
+                        sched["schedule_message_id"] = None
+                        save_scheduler(sched)
+                    except Exception:
+                        pass
+                # Show admin panel
                 from types import SimpleNamespace
                 dummy_msg = SimpleNamespace(chat=SimpleNamespace(id=chat_id), from_user=SimpleNamespace(id=user_id))
                 show_admin_panel(dummy_msg)
             return
 
+        # -------------------------------------------------------------------
+        # SCHEDULER SETTINGS – Edit in place
+        # -------------------------------------------------------------------
         if data.startswith("sched_") and is_admin(user_id):
             sched  = load_scheduler()
             action = data.replace("sched_", "")
@@ -1293,7 +1337,13 @@ def handle_all_callbacks(call):
                 sched["answer_time_limit"] = int(action.replace("timelimit_", ""))
                 save_scheduler(sched)
                 bot.answer_callback_query(call.id, f"Time limit set to {sched['answer_time_limit']}s", show_alert=True)
-            show_schedule_panel(chat_id)
+
+            # Edit the existing schedule message instead of sending a new one
+            msg_id = sched.get("schedule_message_id")
+            if msg_id:
+                show_schedule_panel(chat_id, edit_message_id=msg_id)
+            else:
+                show_schedule_panel(chat_id)
             return
 
         if data == "tagall_confirm" and is_admin(user_id):
@@ -1323,7 +1373,7 @@ def handle_all_callbacks(call):
             bot.answer_callback_query(call.id)
             return
 
-        # ── Help menu (exact match first) ──────────────────────────────
+        # ── Help menu ──────────────────────────────────────────────────────
         if data == "help_main":
             text = "📖 *ZA SORA GAME CLUB — HELP*\n\nChoose a category below:"
             markup = _build_help_menu()
