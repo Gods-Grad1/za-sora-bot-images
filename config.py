@@ -2,9 +2,11 @@
 # ZA SORA BOT — MASTER CONFIGURATION
 # ============================================================
 
-# --- CORE API & SECURITY ---
-API_TOKEN   = "8359703884:AAFxGuuzoVflIoVK0RXlp9kGaeXitqizI4g"
-ADMIN_ID    = 8234402535
+import os
+
+# --- CORE API & SECURITY (now read from environment) ---
+API_TOKEN   = os.environ.get("API_TOKEN", "")
+ADMIN_ID    = int(os.environ.get("ADMIN_ID", 0))   # 0 = invalid, will be checked
 
 # --- GOOGLE SHEETS ---
 CURRENT_TABLE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSh6Ulx9_QZOrrAFNA4l1zj3Gv16HCpLilwhudvSJu4zUeMEoQDn5MM7UFe4c2hoUVSr0JYdNOggi-_/pub?gid=0&single=true&output=csv"
@@ -14,8 +16,8 @@ FIXTURES_CSV_URL      = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSh6Ulx
 GITHUB_RAW_BASE_URL = "https://raw.githubusercontent.com/Gods-Grad1/za-sora-bot/main/images/"
 
 # --- GITHUB API (for uploading images) ---
-GITHUB_TOKEN = "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"
-GITHUB_REPO = "Gods-Grad1/za-sora-bot"
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+GITHUB_REPO  = "Gods-Grad1/za-sora-bot"
 GITHUB_BRANCH = "main"
 
 # --- DATABASE FILE PATHS ---
@@ -45,8 +47,8 @@ MORNING_MSG_HOUR = 8
 MORNING_MSG_MIN  = 0
 DAILY_CHALLENGE_HOUR = 14
 DAILY_CHALLENGE_MIN  = 0
-SCHEDULER_WINDOW_START = 10
-SCHEDULER_WINDOW_END   = 23
+SCHEDULER_WINDOW_START = 10   # <-- changed from 18 to 10
+SCHEDULER_WINDOW_END   = 23   # unchanged
 
 # --- POINTS ECONOMY ---
 POINTS_CHARACTER_GAME  = 50
@@ -80,8 +82,10 @@ SCHEDULE_INTERVALS = [30, 60, 120, 240, 360]
 # --- SHOP ---
 SHOP_TITLE_DURATION_DAYS = 30
 
-# --- AUTO-DELETE ---
-AUTO_DELETE_DELAY = 300   # seconds (5 minutes)
+# --- AUTO-DELETE DELAYS (new) ---
+AUTO_DELETE_DELAY      = 300    # 5 minutes (default)
+GAME_AUTO_DELETE_DELAY = 1800   # 30 minutes for game questions and time‑up warnings
+ADMIN_PANEL_DELAY      = 600    # 10 minutes for schedule/admin panels
 
 # --- DESIGN PALETTE ---
 THEME_BG            = "#0d0d0f"
