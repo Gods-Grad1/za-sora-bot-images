@@ -72,8 +72,8 @@ def schedule_delete(chat_id, message_id, delay=config.AUTO_DELETE_DELAY):
     timer.daemon = True
     timer.start()
 
+# Safe edit – we'll keep it for leaderboard, but help menu uses delete+send
 def safe_edit_message(chat_id, message_id, text, reply_markup=None, parse_mode="Markdown"):
-    """Edit message – if it fails, just ignore (no error shown)."""
     try:
         bot.edit_message_text(text, chat_id, message_id,
                               reply_markup=reply_markup, parse_mode=parse_mode)
@@ -1268,8 +1268,12 @@ def handle_all_callbacks(call):
             text = _get_help_text(category)
             markup = telebot.types.InlineKeyboardMarkup()
             markup.add(telebot.types.InlineKeyboardButton("🔙 Back", callback_data="help_main"))
-            safe_edit_message(chat_id, call.message.message_id, text,
-                              reply_markup=markup, parse_mode="Markdown")
+            # Delete old message and send new
+            try:
+                bot.delete_message(chat_id, call.message.message_id)
+            except Exception:
+                pass
+            bot.send_message(chat_id, text, reply_markup=markup, parse_mode="Markdown")
             bot.answer_callback_query(call.id)
             return
 
