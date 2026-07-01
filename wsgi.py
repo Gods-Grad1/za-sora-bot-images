@@ -15,6 +15,7 @@ apihelper.proxy = None
 
 # Import your bot
 import bot
+import profile_banner  # <-- NEW
 
 # Delete any existing webhook to avoid conflict
 bot.bot.delete_webhook()
@@ -31,14 +32,11 @@ thread.start()
 
 # ------------------------------------------------------------
 # 2. Start the scheduler and broadcast checker threads
-#    (these were inside if __name__ == "__main__" before)
 # ------------------------------------------------------------
 def start_scheduler():
-    # This starts the scheduler thread safely (handles duplicates)
     bot.start_scheduler()
 
 def start_broadcast_checker():
-    # This starts the broadcast checker thread safely
     bot.start_broadcast_checker()
 
 # Start both as daemon threads so they run alongside Gunicorn
@@ -48,7 +46,19 @@ start_broadcast_checker()
 print("🚀 Scheduler and broadcast checker threads started.")
 
 # ------------------------------------------------------------
-# 3. Flask app for Render's health checks
+# 3. NEW: Pre-generate profile banners for all users in background
+# ------------------------------------------------------------
+def pre_generate_banners():
+    # Small delay to let the bot fully initialize
+    time.sleep(5)
+    profile_banner.pre_generate_all_banners(bot.bot)
+
+banner_thread = threading.Thread(target=pre_generate_banners, daemon=True)
+banner_thread.start()
+print("🖼️ Background banner pre-generation started.")
+
+# ------------------------------------------------------------
+# 4. Flask app for Render's health checks
 # ------------------------------------------------------------
 from flask import Flask
 app = Flask(__name__)
