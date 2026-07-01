@@ -34,19 +34,16 @@ thread.start()
 #    (these were inside if __name__ == "__main__" before)
 # ------------------------------------------------------------
 def start_scheduler():
-    # This function is defined in bot.py as 'background_scheduler'
-    bot.background_scheduler()
+    # This starts the scheduler thread safely (handles duplicates)
+    bot.start_scheduler()
 
 def start_broadcast_checker():
-    # This function is defined in bot.py as 'broadcast_checker'
-    bot.broadcast_checker()
+    # This starts the broadcast checker thread safely
+    bot.start_broadcast_checker()
 
 # Start both as daemon threads so they run alongside Gunicorn
-scheduler_thread = threading.Thread(target=start_scheduler, daemon=True)
-scheduler_thread.start()
-
-broadcast_thread = threading.Thread(target=start_broadcast_checker, daemon=True)
-broadcast_thread.start()
+start_scheduler()
+start_broadcast_checker()
 
 print("🚀 Scheduler and broadcast checker threads started.")
 
