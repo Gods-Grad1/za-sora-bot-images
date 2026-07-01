@@ -1,5 +1,6 @@
 import os
 import io
+import time
 import requests
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import config
@@ -11,18 +12,18 @@ BANNER_TEMPLATE_URL = f"{config.GITHUB_RAW_BASE_URL}templates/profile_banner.png
 BANNER_CACHE_DIR = "profile_banners"
 TEMPLATE_CACHE_FILE = "banner_template.png"
 
-# --- Template Measurements (YOUR NEW TEMPLATE) ---
-# Big circle (user's profile picture)
+# --- Template Measurements ---
+# Big circle (user's profile picture) - using OUTER radius to fill the ring
 BIG_CIRCLE_CENTER_X = 248
 BIG_CIRCLE_CENTER_Y = 333
-BIG_CIRCLE_RADIUS   = 105   # Inner colored disc radius (the actual visible area)
+BIG_CIRCLE_RADIUS   = 158   # Changed from 105 to 158 (fills entire silver ring)
 
 # Small circle (group/chat profile picture)
 SMALL_CIRCLE_CENTER_X = 1460
 SMALL_CIRCLE_CENTER_Y = 340
-SMALL_CIRCLE_RADIUS   = 93   # Full circle radius
+SMALL_CIRCLE_RADIUS   = 93
 
-# Text box (username)
+# Text box (username) - center is (858, 335)
 TEXT_BOX_X = 443
 TEXT_BOX_Y = 278
 TEXT_BOX_WIDTH = 830
@@ -77,10 +78,8 @@ def _get_chat_picture(bot, chat_id):
     try:
         chat = bot.get_chat(chat_id)
         if not chat.photo:
-            print(f"No photo found for chat {chat_id}")
             return None
         
-        # Use the largest available photo
         file_id = chat.photo.big_file_id
         file_info = bot.get_file(file_id)
         file_url = f"https://api.telegram.org/file/bot{config.API_TOKEN}/{file_info.file_path}"
@@ -122,7 +121,7 @@ def _get_font_size(text, box_width, box_height, max_font_size):
     return 20
 
 def _add_text_to_banner(img, text, box_x, box_y, box_width, box_height, max_font_size, color):
-    """Adds centered text inside the text box."""
+    """Adds perfectly centered text inside the text box (baseline-adjusted)."""
     draw = ImageDraw.Draw(img)
     
     font_size = _get_font_size(text, box_width, box_height, max_font_size)
@@ -133,12 +132,18 @@ def _add_text_to_banner(img, text, box_x, box_y, box_width, box_height, max_font
     except:
         font = ImageFont.load_default()
     
+    # Get bounding box of the text
     bbox = draw.textbbox((0, 0), text, font=font)
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
     
-    x = box_x + (box_width - text_width) // 2
-    y = box_y + (box_height - text_height) // 2
+    # Calculate center positions
+    center_x = box_x + (box_width // 2)
+    center_y = box_y + (box_height // 2)
+    
+    # Draw at the center with proper baseline adjustment
+    x = center_x - (text_width // 2)
+    y = center_y - (text_height // 2) - bbox[1]  # bbox[1] is the top offset from baseline
     
     draw.text((x, y), text, fill=color, font=font)
 
@@ -182,7 +187,7 @@ def generate_profile_banner(bot, user_id, username, chat_id):
     
     img = template.copy()
     
-    # 3. Paste user's profile picture (BIG CIRCLE)
+    # 3. Paste user's profile picture (BIG CIRCLE - fills entire ring)
     profile_pic = _get_profile_picture(bot, user_id)
     if profile_pic:
         size = (BIG_CIRCLE_RADIUS * 2, BIG_CIRCLE_RADIUS * 2)
@@ -204,7 +209,7 @@ def generate_profile_banner(bot, user_id, username, chat_id):
         top = SMALL_CIRCLE_CENTER_Y - SMALL_CIRCLE_RADIUS
         img.paste(chat_pic, (left, top), mask)
 
-    # 5. Add username in the text box
+    # 5. Add username in the text box (perfectly centered)
     username_display = f"@{username}"
     _add_text_to_banner(img, username_display, TEXT_BOX_X, TEXT_BOX_Y,
                         TEXT_BOX_WIDTH, TEXT_BOX_HEIGHT,
@@ -226,5 +231,42 @@ def generate_profile_banner(bot, user_id, username, chat_id):
         _save_github_url_to_user(bot, user_id, raw_url)
         return raw_url
     else:
-        # Fallback: return local file path
         return local_path
+
+# ===================================================================
+# BACKGROUND PRE-GENERATION (NEW)
+# ===================================================================
+
+def pre_generate_all_banners(bot):
+    """
+    Runs on startup in a background thread.
+    Generates banners for ALL users across ALL groups who don't have one yet.
+    Adds a small delay to avoid hitting Telegram rate limits.
+    """
+    print("🖼️ [BANNER] Starting background pre-generation...")
+    groups = database.get_all_groups()
+    total_users = 0
+    generated = 0
+    skipped = 0
+    
+    for group_id in groups:
+        members = database.get_all_members(group_id)
+        total_users += len(members)
+        
+        for user_id, username in members:
+            # Check if banner already exists
+            existing_url = _get_existing_github_url(user_id)
+            if existing_url:
+                skipped += 1
+                continue
+            
+            # Generate banner for this user in this group
+            try:
+                print(f"🖼️ [BANNER] Generating for {username} (ID: {user_id})...")
+                generate_profile_banner(bot, user_id, username, group_id)
+                generated += 1
+                time.sleep(0.5)  # Avoid flood limits
+            except Exception as e:
+                print(f"❌ [BANNER] Failed for {username}: {e}")
+    
+    print(f"✅ [BANNER] Done. Total users: {total_users}, Generated: {generated}, Skipped (existing): {skipped}")
