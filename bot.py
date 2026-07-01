@@ -158,7 +158,9 @@ def _get_help_text(category):
             "/rebuildcache — Rebuild image cache\n"
             "/testmorning — Test morning message\n"
             "/status — Bot status\n"
-            "/listbroadcasts — List scheduled broadcasts"
+            "/listbroadcasts — List scheduled broadcasts\n"
+            "/generateall — Generate banners for all users\n"
+            "/trackgroup — Manually track this group (admin)"
         ),
     }
     return texts.get(category, "Unknown category.")
@@ -387,7 +389,7 @@ def show_quotes_page(chat_id, page=1):
     return text, markup
 
 # ---------------------------------------------------------------------------
-# ADMIN PANEL
+# ADMIN PANEL (UPDATED: Added Track Group button)
 # ---------------------------------------------------------------------------
 
 def show_admin_panel(message):
@@ -408,6 +410,7 @@ def show_admin_panel(message):
         telebot.types.InlineKeyboardButton("🔇 Mute User",             callback_data="admin_mute"),
         telebot.types.InlineKeyboardButton("📢 Broadcast",             callback_data="admin_broadcast"),
         telebot.types.InlineKeyboardButton("🔍 Check Images",          callback_data="admin_checkimages"),
+        telebot.types.InlineKeyboardButton("📌 Track Group",           callback_data="admin_trackgroup"),  # NEW
     )
     sched = load_scheduler()
     status_icon = "✅" if sched.get("enabled") else "❌"
@@ -772,11 +775,9 @@ def handle_all_messages(message):
 
     if cmd == '/start':
         try:
-            # Try to send the welcome GIF first
             gif_url = "https://raw.githubusercontent.com/Gods-Grad1/za-sora-bot/main/images/welcome.gif"
             bot.send_animation(chat_id, gif_url, caption=config.WELCOME_MSG, parse_mode="Markdown")
         except Exception as e:
-            # Fallback: send just the text message if GIF fails
             print(f"Failed to send welcome GIF: {e}")
             bot.reply_to(message, config.WELCOME_MSG, parse_mode="Markdown")
 
@@ -1038,6 +1039,17 @@ def handle_all_messages(message):
     elif cmd == '/trackgroup' and is_admin(user_id):
         database.track_member(bot, chat_id, user_id, username)
         bot.reply_to(message, "✅ This group is now tracked in the database.")
+
+    # NEW: Generate all banners manually
+    elif cmd == '/generateall' and is_admin(user_id):
+        bot.reply_to(message, "🖼️ Starting background banner generation for all users...")
+        def generate_in_background():
+            try:
+                profile_banner.pre_generate_all_banners(bot)
+                bot.send_message(chat_id, "✅ Banner generation completed for all users.")
+            except Exception as e:
+                bot.send_message(chat_id, f"❌ Banner generation failed: {e}")
+        threading.Thread(target=generate_in_background, daemon=True).start()
     # --- End debug commands ---
 
     elif cmd == '/addquote' and chat_id == user_id and is_admin(user_id):
@@ -1350,6 +1362,10 @@ def handle_all_callbacks(call):
                 bot.send_message(chat_id, "🔍 Checking for missing images...")
                 notify_missing_images()
                 bot.send_message(chat_id, "✅ Check complete. Admin has been notified.")
+            elif action == "trackgroup":  # NEW
+                bot.answer_callback_query(call.id)
+                database.track_member(bot, chat_id, user_id, username)
+                bot.send_message(chat_id, "✅ This group is now tracked in the database.")
             elif action == "back":
                 sched = load_scheduler()
                 msg_id = sched.get("schedule_message_id")
@@ -2014,6 +2030,7 @@ def register_commands():
         # Debug commands
         telebot.types.BotCommand("listpending",  "📋 List pending broadcasts"),
         telebot.types.BotCommand("trackgroup",   "📌 Track this group manually"),
+        telebot.types.BotCommand("generateall",  "🖼️ Generate banners for all users"),
     ]
 
     try:
@@ -2099,15 +2116,12 @@ def show_my_stats(message, target_id=None, target_name=None):
         
         if banner_url_or_path:
             if banner_url_or_path.startswith("http"):
-                # It's a GitHub URL – send as photo with caption
                 bot.send_photo(chat_id, banner_url_or_path, caption=text, parse_mode="Markdown")
             else:
-                # It's a local file path – open and send
                 with open(banner_url_or_path, 'rb') as f:
                     bot.send_photo(chat_id, f, caption=text, parse_mode="Markdown")
             return
     except Exception as e:
-        # If banner generation fails, fall back to text only
         print(f"Banner generation failed for {target_id}: {e}")
     
     # Fallback: send plain text if banner is unavailable
