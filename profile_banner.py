@@ -12,18 +12,18 @@ BANNER_TEMPLATE_URL = f"{config.GITHUB_RAW_BASE_URL}templates/profile_banner.png
 BANNER_CACHE_DIR = "profile_banners"
 TEMPLATE_CACHE_FILE = "banner_template.png"
 
-# --- Template Measurements ---
-# Big circle (user's profile picture) - using OUTER radius to fill the ring
-BIG_CIRCLE_CENTER_X = 248
-BIG_CIRCLE_CENTER_Y = 333
-BIG_CIRCLE_RADIUS   = 158   # Changed from 105 to 158 (fills entire silver ring)
+# --- Template Measurements (UPDATED COORDINATES) ---
+# Big circle (user's profile picture)
+BIG_CIRCLE_CENTER_X = 258  # Updated from 248
+BIG_CIRCLE_CENTER_Y = 335  # Updated from 333
+BIG_CIRCLE_RADIUS   = 158  # Fill the ring (updated from 105)
 
 # Small circle (group/chat profile picture)
 SMALL_CIRCLE_CENTER_X = 1460
 SMALL_CIRCLE_CENTER_Y = 340
 SMALL_CIRCLE_RADIUS   = 93
 
-# Text box (username) - center is (858, 335)
+# Text box bounds (centres at 858, 335)
 TEXT_BOX_X = 443
 TEXT_BOX_Y = 278
 TEXT_BOX_WIDTH = 830
@@ -234,7 +234,7 @@ def generate_profile_banner(bot, user_id, username, chat_id):
         return local_path
 
 # ===================================================================
-# BACKGROUND PRE-GENERATION (NEW)
+# BACKGROUND PRE-GENERATION
 # ===================================================================
 
 def pre_generate_all_banners(bot):
