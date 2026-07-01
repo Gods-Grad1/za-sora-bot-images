@@ -11,7 +11,7 @@ import config
 import database
 import graphics
 import games
-import profile_banner  # <-- NEW
+import profile_banner  # <-- Keep this import
 
 # Force no proxy
 os.environ['HTTP_PROXY'] = ''
@@ -43,7 +43,7 @@ def load_scheduler():
         "last_game":  0,
         "tagall_last": 0,
         "last_morning_date": "",
-        "schedule_message_id": None,   # <-- track schedule panel message ID
+        "schedule_message_id": None,
     })
 
 def save_scheduler(data):
@@ -446,7 +446,7 @@ def _build_schedule_panel(chat_id):
         for s in [30, 45, 60, 90, 120]
     ])
     
-    # Window start/end buttons (NEW)
+    # Window start/end buttons
     start = sched.get('window_start', 18)
     end   = sched.get('window_end', 23)
     markup.add(
@@ -625,7 +625,7 @@ def send_morning_message(bot):
         database.log_error_to_admin(bot, "Morning Message Overall", e)
 
 # ---------------------------------------------------------------------------
-# BROADCAST HELPERS (MODIFIED: Supports --tagall flag)
+# BROADCAST HELPERS
 # ---------------------------------------------------------------------------
 
 def _send_pending_broadcasts(bot):
@@ -635,7 +635,6 @@ def _send_pending_broadcasts(bot):
         return
     for broadcast in pending:
         success = True
-        # Check if this broadcast needs tagging
         sched = load_scheduler()
         tag_all = sched.get(f"broadcast_tagall_{broadcast['send_time']}", False)
         if tag_all:
@@ -655,7 +654,6 @@ def _send_pending_broadcasts(bot):
                             members = database.get_all_members(gid)
                             if members:
                                 tag_line = " ".join([f"[{name}](tg://user?id={uid})" for uid, name in members])
-                                # If combined message is too long, send separately
                                 if len(msg_to_send) + len(tag_line) + 20 > 4096:
                                     bot.send_message(gid, msg_to_send, parse_mode="Markdown")
                                     bot.send_message(gid, f"📢 *Tagging everyone:*\n{tag_line}", parse_mode="Markdown")
@@ -679,7 +677,6 @@ def _send_pending_broadcasts(bot):
         
         if success:
             database.mark_broadcast_sent(bot, broadcast["id"])
-            # Clean up the tag_all flag
             if tag_all:
                 sched.pop(f"broadcast_tagall_{broadcast['send_time']}", None)
                 save_scheduler(sched)
@@ -1006,14 +1003,12 @@ def handle_all_messages(message):
             bot.reply_to(message, "❌ Please provide a message.")
             return
         
-        # Check for --tagall flag
         tag_all = False
         if "--tagall" in message_text:
             tag_all = True
             message_text = message_text.replace("--tagall", "").strip()
         
         database.add_broadcast(bot, None, message_text, send_time)
-        # Store the tag_all flag in scheduler state
         sched = load_scheduler()
         sched[f"broadcast_tagall_{send_time}"] = tag_all
         save_scheduler(sched)
@@ -1038,33 +1033,7 @@ def handle_all_messages(message):
         bot.reply_to(message, "✅ This group is now tracked in the database.")
     # --- End debug commands ---
 
-    elif cmd == '/profile':
-        user_id = message.from_user.id
-        username = message.from_user.username or message.from_user.first_name
-        chat_id = message.chat.id
-        
-        status_msg = bot.reply_to(message, "🎨 Generating your profile banner...")
-        
-        def generate_and_send():
-            try:
-                result = profile_banner.generate_profile_banner(bot, user_id, username)
-                if result:
-                    if result.startswith("http"):
-                        bot.send_photo(chat_id, result, caption="🎨 *Your Profile Banner*", parse_mode="Markdown")
-                    else:
-                        with open(result, 'rb') as f:
-                            bot.send_photo(chat_id, f, caption="🎨 *Your Profile Banner*", parse_mode="Markdown")
-                else:
-                    bot.reply_to(message, "❌ Failed to generate your profile banner.")
-            except Exception as e:
-                bot.reply_to(message, f"❌ Error: {e}")
-            finally:
-                try:
-                    bot.delete_message(chat_id, status_msg.message_id)
-                except:
-                    pass
-        
-        threading.Thread(target=generate_and_send, daemon=True).start()
+    # REMOVED: /profile command – no longer needed (moved to /mystats)
 
     elif cmd == '/addquote' and chat_id == user_id and is_admin(user_id):
         if not args:
@@ -1377,7 +1346,6 @@ def handle_all_callbacks(call):
                 notify_missing_images()
                 bot.send_message(chat_id, "✅ Check complete. Admin has been notified.")
             elif action == "back":
-                # Delete the schedule message if it exists
                 sched = load_scheduler()
                 msg_id = sched.get("schedule_message_id")
                 if msg_id:
@@ -1387,7 +1355,6 @@ def handle_all_callbacks(call):
                         save_scheduler(sched)
                     except Exception:
                         pass
-                # Show admin panel
                 from types import SimpleNamespace
                 dummy_msg = SimpleNamespace(chat=SimpleNamespace(id=chat_id), from_user=SimpleNamespace(id=user_id))
                 show_admin_panel(dummy_msg)
@@ -1427,7 +1394,6 @@ def handle_all_callbacks(call):
                 save_scheduler(sched)
                 bot.answer_callback_query(call.id, f"End set to {sched['window_end']}:00", show_alert=True)
 
-            # Edit the existing schedule message instead of sending a new one
             msg_id = sched.get("schedule_message_id")
             if msg_id:
                 show_schedule_panel(chat_id, edit_message_id=msg_id)
@@ -2017,7 +1983,6 @@ def register_commands():
         telebot.types.BotCommand("powerups",     "⚡ View your power-ups"),
         telebot.types.BotCommand("table",        "📋 League standings"),
         telebot.types.BotCommand("fixtures",     "📅 Match fixtures"),
-        telebot.types.BotCommand("profile",      "🎨 Your profile banner"),
     ]
 
     admin_commands = public_commands + [
@@ -2057,7 +2022,7 @@ def register_commands():
         print(f"⚠️ Failed to register commands: {e}")
 
 # ---------------------------------------------------------------------------
-# MY STATS COMMAND (Text version)
+# MY STATS COMMAND (UPDATED: includes profile banner as photo)
 # ---------------------------------------------------------------------------
 
 def show_my_stats(message, target_id=None, target_name=None):
@@ -2122,6 +2087,26 @@ def show_my_stats(message, target_id=None, target_name=None):
         f"⚡ *Power-ups:* {powerup_str}\n"
         f"{xp_status}"
     )
+
+    # --- NEW: Send stats as a photo with the profile banner as the image ---
+    try:
+        # Generate or retrieve the profile banner for the target user
+        banner_url_or_path = profile_banner.generate_profile_banner(bot, target_id, target_name)
+        
+        if banner_url_or_path:
+            if banner_url_or_path.startswith("http"):
+                # It's a GitHub URL – send as photo with caption
+                bot.send_photo(chat_id, banner_url_or_path, caption=text, parse_mode="Markdown")
+            else:
+                # It's a local file path – open and send
+                with open(banner_url_or_path, 'rb') as f:
+                    bot.send_photo(chat_id, f, caption=text, parse_mode="Markdown")
+            return
+    except Exception as e:
+        # If banner generation fails, fall back to text only
+        print(f"Banner generation failed for {target_id}: {e}")
+    
+    # Fallback: send plain text if banner is unavailable
     if target_id == message.from_user.id:
         bot.reply_to(message, text, parse_mode="Markdown")
     else:
