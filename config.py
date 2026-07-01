@@ -1,12 +1,12 @@
+import os
+
 # ============================================================
 # ZA SORA BOT — MASTER CONFIGURATION
 # ============================================================
 
-import os
-
-# --- CORE API & SECURITY (now read from environment) ---
+# --- CORE API & SECURITY ---
 API_TOKEN   = os.environ.get("API_TOKEN", "")
-ADMIN_ID    = int(os.environ.get("ADMIN_ID", 0))   # 0 = invalid, will be checked
+ADMIN_ID    = int(os.environ.get("ADMIN_ID", 0))
 
 # --- GOOGLE SHEETS ---
 CURRENT_TABLE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSh6Ulx9_QZOrrAFNA4l1zj3Gv16HCpLilwhudvSJu4zUeMEoQDn5MM7UFe4c2hoUVSr0JYdNOggi-_/pub?gid=0&single=true&output=csv"
@@ -14,11 +14,24 @@ FIXTURES_CSV_URL      = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSh6Ulx
 
 # --- GITHUB IMAGE BACKUP ---
 GITHUB_RAW_BASE_URL = "https://raw.githubusercontent.com/Gods-Grad1/za-sora-bot/main/images/"
-
-# --- GITHUB API (for uploading images) ---
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_REPO  = "Gods-Grad1/za-sora-bot"
 GITHUB_BRANCH = "main"
+
+# --- TRIVIA (stored on generated branch) ---
+TRIVIA_BRANCH = "generated"
+TRIVIA_REMOTE_PATH = "trivia"
+TRIVIA_CATEGORY_FILES = {
+    "Gaming": "gaming.json",
+    "Anime": "anime.json",
+    "Movies": "movies.json",
+    "General": "general.json",
+    "Food": "food.json",
+    "Sports": "sports.json",
+    "Technology": "technology.json",
+    "Bible": "bible.json",
+}
+TRIVIA_DB = "trivia_db.json"  # Fallback local file
 
 # --- DATABASE FILE PATHS ---
 GROUP_DATA_FILE   = "group_data.json"
@@ -27,7 +40,6 @@ STATE_FILE        = "bot_state.json"
 CHAR_DB           = "characters_db.json"
 MEDIA_DB          = "media_db.json"
 QUOTES_FILE       = "quotes.json"
-TRIVIA_DB         = "trivia_db.json"
 SCHEDULER_FILE    = "scheduler.json"
 SHOP_FILE         = "shop.json"
 LEADERBOARD_FILE  = "leaderboard_history.json"
@@ -36,18 +48,18 @@ DAILY_FILE        = "daily_challenge.json"
 MUTE_FILE         = "muted_users.json"
 BROADCAST_FILE    = "broadcasts.json"
 
-# --- IMAGE DIRECTORIES (ephemeral cache) ---
+# --- IMAGE DIRECTORIES ---
 IMAGE_CACHE_DIR        = "game_image_cache"
 LOCAL_CHAR_IMAGES_DIR  = "local_images/characters"
 LOCAL_MEDIA_IMAGES_DIR = "local_images/media"
 
 # --- TIMEZONE ---
-TIMEZONE         = "Africa/Johannesburg"   # UTC+2
+TIMEZONE         = "Africa/Johannesburg"
 MORNING_MSG_HOUR = 8
 MORNING_MSG_MIN  = 0
 DAILY_CHALLENGE_HOUR = 14
 DAILY_CHALLENGE_MIN  = 0
-SCHEDULER_WINDOW_START = 10   # Changed from 18 to 10
+SCHEDULER_WINDOW_START = 10
 SCHEDULER_WINDOW_END   = 23
 
 # --- POINTS ECONOMY ---
@@ -60,12 +72,7 @@ POINTS_HINT_PENALTY    = 15
 POINTS_HINT_MAX        = 3
 
 # --- STREAK MULTIPLIERS ---
-STREAK_MULTIPLIERS = {
-    0:  1.0,
-    3:  2.0,
-    5:  3.0,
-    10: 5.0,
-}
+STREAK_MULTIPLIERS = {0: 1.0, 3: 2.0, 5: 3.0, 10: 5.0}
 
 # --- VERSUS MODE ---
 VERSUS_ACCEPT_TIMEOUT  = 60
@@ -78,14 +85,12 @@ TAGALL_COOLDOWN_HOURS  = 6
 
 # --- SCHEDULER ---
 SCHEDULE_INTERVALS = [30, 60, 120, 240, 360]
-
-# --- SHOP ---
 SHOP_TITLE_DURATION_DAYS = 30
 
-# --- AUTO-DELETE DELAYS (NEW) ---
-AUTO_DELETE_DELAY      = 300    # 5 minutes (default)
-GAME_AUTO_DELETE_DELAY = 1800   # 30 minutes for game questions and time‑up warnings
-ADMIN_PANEL_DELAY      = 600    # 10 minutes for schedule/admin panels
+# --- AUTO-DELETE DELAYS ---
+AUTO_DELETE_DELAY      = 300
+GAME_AUTO_DELETE_DELAY = 1800
+ADMIN_PANEL_DELAY      = 600
 
 # --- DESIGN PALETTE ---
 THEME_BG            = "#0d0d0f"
@@ -142,7 +147,7 @@ CHAR_CATEGORIES = {
 
 DEFAULT_ANSWER_TIME = 60
 
-# --- WELCOME MESSAGE (Luffy Style) ---
+# --- WELCOME MESSAGE ---
 WELCOME_MSG = (
     "☠️ *KONO BOT WA!* ☠️\n\n"
     "Ore wa Monkey D. Luffy! Kaizoku-ou ni naru otoko da! 🏴‍☠️\n\n"
@@ -154,33 +159,13 @@ WELCOME_MSG = (
     "*ZAAA SORAAA!* 🌊🔥"
 )
 
-# ============================================================
-# NEW FEATURES CONFIGURATION
-# ============================================================
-
 # --- POWER-UPS ---
 POWERUPS = {
-    "fifty_fifty": {
-        "name": "50/50",
-        "cost": 100,
-        "emoji": "✂️",
-        "description": "Removes two wrong answers in trivia."
-    },
-    "streak_freeze": {
-        "name": "Streak Freeze",
-        "cost": 200,
-        "emoji": "🧊",
-        "description": "Your streak won't break on one wrong answer."
-    },
-    "double_down": {
-        "name": "Double Down",
-        "cost": 150,
-        "emoji": "⬆️",
-        "description": "Double points on next correct (but double loss on wrong)."
-    },
+    "fifty_fifty": {"name": "50/50", "cost": 100, "emoji": "✂️", "description": "Removes two wrong answers in trivia."},
+    "streak_freeze": {"name": "Streak Freeze", "cost": 200, "emoji": "🧊", "description": "Your streak won't break on one wrong answer."},
+    "double_down": {"name": "Double Down", "cost": 150, "emoji": "⬆️", "description": "Double points on next correct."},
 }
 
-# --- SHOP TITLES (includes power-ups) ---
 SHOP_TITLES = [
     {"id": "quiz_master",   "name": "🏆 Quiz Master",     "cost": 200},
     {"id": "on_fire",       "name": "🔥 On Fire",         "cost": 150},
@@ -202,7 +187,6 @@ SHOP_TITLES = [
     {"id": "double_down",   "name": "⬆️ Double Down",     "cost": 150},
 ]
 
-# --- WHEEL OF FORTUNE (Balanced) ---
 WHEEL_SLOTS = [
     {"name": "50 pts", "points": 50, "weight": 10},
     {"name": "30 pts", "points": 30, "weight": 15},
@@ -216,7 +200,6 @@ WHEEL_SLOTS = [
     {"name": "Nothing!", "points": 0, "weight": 7},
 ]
 
-# --- ACHIEVEMENTS / BADGES ---
 ACHIEVEMENTS = {
     "first_blood": {"name": "First Blood", "icon": "🩸", "description": "First correct answer", "condition": {"correct": 1}},
     "streak_5": {"name": "Streak 5", "icon": "🔥", "description": "5 correct in a row", "condition": {"best_streak": 5}},
@@ -225,6 +208,6 @@ ACHIEVEMENTS = {
     "centurion": {"name": "Centurion", "icon": "💯", "description": "100 correct answers", "condition": {"correct": 100}},
     "trivia_king": {"name": "Trivia King", "icon": "👑", "description": "50 trivia correct", "condition": {"trivia_correct": 50}},
     "versus_win": {"name": "Versus Champ", "icon": "⚔️", "description": "5 versus wins", "condition": {"versus_wins": 5}},
-    "daily_champ": {"name": "Daily Champ", "icon": "🌞", "description": "10 daily challenge wins", "condition": {"daily_wins": 10}},
+    "daily_champ": {"name": "Daily Champ", "icon": "🌞", "description": "10 daily wins", "condition": {"daily_wins": 10}},
     "quiz_master": {"name": "Quiz Master", "icon": "📚", "description": "200 total correct", "condition": {"correct": 200}},
 }
