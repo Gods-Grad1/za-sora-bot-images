@@ -680,17 +680,14 @@ def _start_timer(bot, chat_id, seconds):
     threading.Thread(target=timeout, daemon=True).start()
 
 # ---------------------------------------------------------------------------
-# TRIVIA GAME (UPDATED to use new loader)
+# TRIVIA GAME (UPDATED: fifty-fifty fix)
 # ---------------------------------------------------------------------------
 
 def start_trivia_game(bot, chat_id, category=None, user_id=None):
     if user_id and _check_one_game_lock(bot, chat_id, user_id, game_type="trivia", category=category):
         return None
 
-    # --- CHANGE: Use the new database loader ---
     trivia_data = database.load_trivia_from_github()
-    # --------------------------------------------
-
     if not trivia_data:
         send_and_delete(bot, chat_id, "⚠️ Trivia database not found.")
         return None
@@ -706,9 +703,17 @@ def start_trivia_game(bot, chat_id, category=None, user_id=None):
     options = q["options"]
     answer  = q["answer"]
 
+    # --- Fifty-Fifty power-up activation (FIXED) ---
     fifty_fifty_used = False
     if user_id:
-        if database.use_powerup(bot, chat_id, user_id, "fifty_fifty", username if username else "User"):
+        # Fetch username from the database
+        data = database.load_json(config.GROUP_DATA_FILE, {})
+        chat_str = str(chat_id)
+        user_str = str(user_id)
+        u = database.get_user(data, chat_str, user_str, "User")
+        username = u.get("username", "User")
+        
+        if database.use_powerup(bot, chat_id, user_id, "fifty_fifty", username):
             fifty_fifty_used = True
             correct_option = options[ord(answer) - ord("A")]
             wrong_options = [opt for opt in options if opt != correct_option]
@@ -718,6 +723,7 @@ def start_trivia_game(bot, chat_id, category=None, user_id=None):
             options = trimmed_options
             answer = chr(ord('A') + options.index(correct_option))
             send_and_delete(bot, chat_id, "✂️ *50/50 activated!* Two wrong answers removed.", parse_mode="Markdown")
+    # --- end of fix ---
 
     active_games[chat_id] = {
         "type":     "trivia",
