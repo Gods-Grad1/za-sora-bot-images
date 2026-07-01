@@ -12,6 +12,9 @@ import database
 import graphics
 import games
 import profile_banner
+import requests
+import json
+import base64
 
 # Force no proxy
 os.environ['HTTP_PROXY'] = ''
@@ -35,12 +38,12 @@ database.init_broadcast_db()
 
 def load_scheduler():
     return database.load_json(config.SCHEDULER_FILE, {
-        "enabled":    False,
-        "interval":   60,
-        "game_type":  "random",
+        "enabled": False,
+        "interval": 60,
+        "game_type": "random",
         "window_start": config.SCHEDULER_WINDOW_START,
-        "window_end":   config.SCHEDULER_WINDOW_END,
-        "last_game":  0,
+        "window_end": config.SCHEDULER_WINDOW_END,
+        "last_game": 0,
         "tagall_last": 0,
         "last_morning_date": "",
         "schedule_message_id": None,
@@ -77,8 +80,7 @@ def schedule_delete(chat_id, message_id, delay=config.AUTO_DELETE_DELAY):
 
 def safe_edit_message(chat_id, message_id, text, reply_markup=None, parse_mode="Markdown"):
     try:
-        bot.edit_message_text(text, chat_id, message_id,
-                              reply_markup=reply_markup, parse_mode=parse_mode)
+        bot.edit_message_text(text, chat_id, message_id, reply_markup=reply_markup, parse_mode=parse_mode)
         return True
     except ApiTelegramException as e:
         if "message is not modified" in str(e):
@@ -87,8 +89,7 @@ def safe_edit_message(chat_id, message_id, text, reply_markup=None, parse_mode="
 
 def safe_edit_message_media(chat_id, message_id, media, reply_markup=None):
     try:
-        bot.edit_message_media(chat_id=chat_id, message_id=message_id,
-                              media=media, reply_markup=reply_markup)
+        bot.edit_message_media(chat_id=chat_id, message_id=message_id, media=media, reply_markup=reply_markup)
         return True
     except ApiTelegramException as e:
         if "message is not modified" in str(e):
@@ -149,7 +150,7 @@ def _get_help_text(category):
             "/setschedule — Configure auto-game scheduler\n"
             "/mute @user 1h — Mute a user\n"
             "/unmute @user — Unmute a user\n"
-            "/broadcast YYYY-MM-DD HH:MM msg — Schedule a broadcast\n"
+            "/broadcast YYYY-MM-DD HH:MM msg — Schedule a broadcast (automatically tags all members)\n"
             "/forcebroadcast — Force-send all pending broadcasts\n"
             "/checknow — Manually check for pending broadcasts\n"
             "/uploadtrivia — Upload trivia questions (file)\n"
@@ -160,14 +161,10 @@ def _get_help_text(category):
             "/status — Bot status\n"
             "/listbroadcasts — List scheduled broadcasts\n"
             "/generateall — Generate banners for all users\n"
-            "/trackgroup — Manually track this group (admin)"
+            "/trackgroup — Manually track this group"
         ),
     }
     return texts.get(category, "Unknown category.")
-
-# ---------------------------------------------------------------------------
-# HELP COMMAND
-# ---------------------------------------------------------------------------
 
 def show_help(message):
     chat_id = message.chat.id
@@ -197,7 +194,7 @@ def _build_leaderboard_markup(mode, page, total_pages):
     return markup
 
 # ---------------------------------------------------------------------------
-# LEAGUE TABLE & FIXTURES
+# LEAGUE TABLE & FIXTURES (Keep existing code)
 # ---------------------------------------------------------------------------
 
 def show_league_table(message):
@@ -214,11 +211,7 @@ def show_league_table(message):
 
 def _build_fixtures_menu_markup(rows):
     home_idx, away_idx, _, _, _ = graphics.detect_fixtures_columns(rows)
-    header_offset = 1 if (
-        "home" in str(rows[0][home_idx]).lower() or
-        rows[0][0].lower() in ["md", "matchday"]
-    ) else 0
-
+    header_offset = 1 if ("home" in str(rows[0][home_idx]).lower() or rows[0][0].lower() in ["md", "matchday"]) else 0
     teams = set()
     for row in rows[header_offset:]:
         if len(row) > max(home_idx, away_idx):
@@ -226,7 +219,6 @@ def _build_fixtures_menu_markup(rows):
             a = row[away_idx].strip()
             if h and not h.isdigit(): teams.add(h)
             if a and not a.isdigit(): teams.add(a)
-
     markup = telebot.types.InlineKeyboardMarkup(row_width=1)
     markup.add(
         telebot.types.InlineKeyboardButton("📅  View by Matchday", callback_data="fix_md_menu"),
@@ -256,11 +248,7 @@ def show_fixtures(message):
             bot.reply_to(message, "❌ Fixtures unavailable.")
             return
         markup, _ = _build_fixtures_menu_markup(rows)
-        bot.send_message(
-            message.chat.id,
-            "📋 *FIXTURES*\n\nChoose how you want to browse:",
-            reply_markup=markup, parse_mode="Markdown"
-        )
+        bot.send_message(message.chat.id, "📋 *FIXTURES*\n\nChoose how you want to browse:", reply_markup=markup, parse_mode="Markdown")
     except Exception as e:
         database.log_error_to_admin(bot, "Fixtures Command", e)
         bot.reply_to(message, "💥 Failed to fetch fixtures.")
@@ -279,8 +267,7 @@ def show_leaderboard(message):
     if img:
         caption = f"🏆 *Leaderboard — {mode.upper()}* (Page {page}/{total_pages})"
         markup = _build_leaderboard_markup(mode, page, total_pages)
-        bot.send_photo(message.chat.id, img, caption=caption,
-                       reply_markup=markup, parse_mode="Markdown")
+        bot.send_photo(message.chat.id, img, caption=caption, reply_markup=markup, parse_mode="Markdown")
         if hasattr(img, 'close'): img.close()
     else:
         bot.send_message(message.chat.id, "No scores yet!")
@@ -292,15 +279,8 @@ def show_leaderboard(message):
 def show_shop(message):
     markup = telebot.types.InlineKeyboardMarkup(row_width=1)
     for item in config.SHOP_TITLES:
-        markup.add(telebot.types.InlineKeyboardButton(
-            f"{item['name']} — {item['cost']} pts",
-            callback_data=f"shop_{item['id']}"
-        ))
-    bot.send_message(
-        message.chat.id,
-        "🛒 *POINT SHOP*\n\nTitles expire after 30 days. Special items are instant!",
-        reply_markup=markup, parse_mode="Markdown"
-    )
+        markup.add(telebot.types.InlineKeyboardButton(f"{item['name']} — {item['cost']} pts", callback_data=f"shop_{item['id']}"))
+    bot.send_message(message.chat.id, "🛒 *POINT SHOP*\n\nTitles expire after 30 days. Special items are instant!", reply_markup=markup, parse_mode="Markdown")
 
 # ---------------------------------------------------------------------------
 # TAG ALL
@@ -310,86 +290,71 @@ def tag_all_members(message, custom_msg=""):
     if not is_admin(message.from_user.id):
         bot.reply_to(message, "❌ Admin only.")
         return
-
     sched = load_scheduler()
-    now   = time.time()
+    now = time.time()
     if now - sched.get("tagall_last", 0) < config.TAGALL_COOLDOWN_HOURS * 3600:
         remaining = int((config.TAGALL_COOLDOWN_HOURS * 3600 - (now - sched["tagall_last"])) / 60)
         bot.reply_to(message, f"⏳ Tag all on cooldown. {remaining} minutes remaining.")
         return
-
     markup = telebot.types.InlineKeyboardMarkup()
     safe_msg = custom_msg[:200].replace('"', "'")
     markup.row(
         telebot.types.InlineKeyboardButton("✅ Confirm Send", callback_data="tagall_confirm"),
-        telebot.types.InlineKeyboardButton("❌ Cancel",       callback_data="tagall_cancel")
+        telebot.types.InlineKeyboardButton("❌ Cancel", callback_data="tagall_cancel")
     )
     sched["tagall_pending_msg"] = custom_msg
     sched["tagall_pending_chat"] = message.chat.id
     save_scheduler(sched)
-
-    bot.reply_to(
-        message,
-        f"📢 *Tag All Preview:*\n\n{custom_msg}\n\n"
-        f"This will tag all {len(database.get_all_members(message.chat.id))} tracked members. Confirm?",
-        reply_markup=markup, parse_mode="Markdown"
-    )
+    bot.reply_to(message, f"📢 *Tag All Preview:*\n\n{custom_msg}\n\nThis will tag all {len(database.get_all_members(message.chat.id))} tracked members. Confirm?", reply_markup=markup, parse_mode="Markdown")
 
 def _do_tag_all(chat_id, custom_msg):
     members = database.get_all_members(chat_id)
     if not members:
         bot.send_message(chat_id, "❌ No members tracked yet.")
         return
-
     mentions = " ".join([f"[{name}](tg://user?id={uid})" for uid, name in members])
     full_msg = f"📢 *ANNOUNCEMENT*\n\n{custom_msg}\n\n{mentions}"
-
     if len(full_msg) > 4096:
         bot.send_message(chat_id, f"📢 *ANNOUNCEMENT*\n\n{custom_msg}", parse_mode="Markdown")
         chunk_size = 30
         for i in range(0, len(members), chunk_size):
-            chunk    = members[i:i + chunk_size]
+            chunk = members[i:i+chunk_size]
             mentions = " ".join([f"[{name}](tg://user?id={uid})" for uid, name in chunk])
             bot.send_message(chat_id, mentions, parse_mode="Markdown")
     else:
         bot.send_message(chat_id, full_msg, parse_mode="Markdown")
-
     sched = load_scheduler()
     sched["tagall_last"] = time.time()
     save_scheduler(sched)
 
 # ---------------------------------------------------------------------------
-# QUOTE MANAGEMENT (Admin DM only)
+# QUOTE MANAGEMENT
 # ---------------------------------------------------------------------------
 
 def show_quotes_page(chat_id, page=1):
-    quotes   = database.load_quotes()
+    quotes = database.load_quotes()
     per_page = 10
-    total    = len(quotes)
-    pages    = (total + per_page - 1) // per_page
-    page     = max(1, min(page, pages))
-    start    = (page - 1) * per_page
-    chunk    = quotes[start:start + per_page]
-
+    total = len(quotes)
+    pages = (total + per_page - 1) // per_page
+    page = max(1, min(page, pages))
+    start = (page - 1) * per_page
+    chunk = quotes[start:start+per_page]
     text = f"📝 *Quotes — Page {page}/{pages}* ({total} total)\n\n"
     for q in chunk:
         preview = q["text"][:60] + "..." if len(q["text"]) > 60 else q["text"]
-        text   += f"*#{q['id']}* — {preview}\n"
-        text   += f"_— {q['author']}_\n\n"
-
+        text += f"*#{q['id']}* — {preview}\n_— {q['author']}_\n\n"
     markup = telebot.types.InlineKeyboardMarkup(row_width=2)
-    nav    = []
+    nav = []
     if page > 1:
         nav.append(telebot.types.InlineKeyboardButton("⬅️ Prev", callback_data=f"qpage_{page-1}"))
     if page < pages:
         nav.append(telebot.types.InlineKeyboardButton("Next ➡️", callback_data=f"qpage_{page+1}"))
     if nav:
         markup.row(*nav)
-
     return text, markup
 
 # ---------------------------------------------------------------------------
-# ADMIN PANEL (UPDATED: Added Track Group button)
+# ADMIN PANEL
 # ---------------------------------------------------------------------------
 
 def show_admin_panel(message):
@@ -410,48 +375,26 @@ def show_admin_panel(message):
         telebot.types.InlineKeyboardButton("🔇 Mute User",             callback_data="admin_mute"),
         telebot.types.InlineKeyboardButton("📢 Broadcast",             callback_data="admin_broadcast"),
         telebot.types.InlineKeyboardButton("🔍 Check Images",          callback_data="admin_checkimages"),
-        telebot.types.InlineKeyboardButton("📌 Track Group",           callback_data="admin_trackgroup"),  # NEW
+        telebot.types.InlineKeyboardButton("📌 Track Group",           callback_data="admin_trackgroup"),
     )
     sched = load_scheduler()
     status_icon = "✅" if sched.get("enabled") else "❌"
-    bot.send_message(
-        message.chat.id,
-        f"⚙️ *ADMIN PANEL*\n\n"
-        f"Auto-scheduler: {status_icon} {'ON' if sched.get('enabled') else 'OFF'}\n"
-        f"Interval: every {sched.get('interval', 60)} min\n"
-        f"Game type: {sched.get('game_type', 'random').title()}\n"
-        f"Active window: {sched.get('window_start', 18)}:00 — {sched.get('window_end', 23)}:00",
-        reply_markup=markup, parse_mode="Markdown"
-    )
+    bot.send_message(message.chat.id, f"⚙️ *ADMIN PANEL*\n\nAuto-scheduler: {status_icon} {'ON' if sched.get('enabled') else 'OFF'}\nInterval: every {sched.get('interval', 60)} min\nGame type: {sched.get('game_type', 'random').title()}\nActive window: {sched.get('window_start', 18)}:00 — {sched.get('window_end', 23)}:00", reply_markup=markup, parse_mode="Markdown")
 
 # ---------------------------------------------------------------------------
-# SCHEDULE PANEL – BUILD & SHOW (Edit-in-place)
+# SCHEDULE PANEL – BUILD & SHOW
 # ---------------------------------------------------------------------------
 
 def _build_schedule_panel(chat_id):
-    """Builds the schedule panel text and markup – used for both sending and editing."""
     sched = load_scheduler()
     import telebot
     markup = telebot.types.InlineKeyboardMarkup(row_width=2)
-
     toggle_label = "❌ Disable" if sched.get("enabled") else "✅ Enable"
     markup.add(telebot.types.InlineKeyboardButton(toggle_label, callback_data="sched_toggle"))
-    
-    # Interval buttons
-    markup.add(*[
-        telebot.types.InlineKeyboardButton(f"⏱ {m}min", callback_data=f"sched_interval_{m}")
-        for m in config.SCHEDULE_INTERVALS
-    ])
-    
-    # Time limit buttons
-    markup.add(*[
-        telebot.types.InlineKeyboardButton(f"⏰ {s}s limit", callback_data=f"sched_timelimit_{s}")
-        for s in [30, 45, 60, 90, 120]
-    ])
-    
-    # Window start/end buttons
+    markup.add(*[telebot.types.InlineKeyboardButton(f"⏱ {m}min", callback_data=f"sched_interval_{m}") for m in config.SCHEDULE_INTERVALS])
+    markup.add(*[telebot.types.InlineKeyboardButton(f"⏰ {s}s limit", callback_data=f"sched_timelimit_{s}") for s in [30, 45, 60, 90, 120]])
     start = sched.get('window_start', 18)
-    end   = sched.get('window_end', 23)
+    end = sched.get('window_end', 23)
     markup.add(
         telebot.types.InlineKeyboardButton(f"🕐 Start: {start}:00 ▲", callback_data="sched_window_start_up"),
         telebot.types.InlineKeyboardButton(f"Start: {start}:00 ▼", callback_data="sched_window_start_down"),
@@ -459,8 +402,6 @@ def _build_schedule_panel(chat_id):
         telebot.types.InlineKeyboardButton(f"End: {end}:00 ▼", callback_data="sched_window_end_down"),
         row_width=4
     )
-    
-    # Game type buttons
     markup.add(
         telebot.types.InlineKeyboardButton("🎮 Character", callback_data="sched_type_character"),
         telebot.types.InlineKeyboardButton("🎬 Year",      callback_data="sched_type_year"),
@@ -469,37 +410,19 @@ def _build_schedule_panel(chat_id):
         telebot.types.InlineKeyboardButton("🎲 Random",    callback_data="sched_type_random"),
     )
     markup.add(telebot.types.InlineKeyboardButton("🔙 Back", callback_data="admin_back"))
-
     status_icon = "✅" if sched.get("enabled") else "❌"
-    text = (
-        f"📅 *SCHEDULE SETTINGS*\n\n"
-        f"Status: {status_icon} {'ON' if sched.get('enabled') else 'OFF'}\n"
-        f"Interval: every *{sched.get('interval', 60)} min*\n"
-        f"Type: *{sched.get('game_type', 'random').title()}*\n"
-        f"Window: *{sched.get('window_start',18)}:00 – {sched.get('window_end',23)}:00*\n"
-        f"⏰ Answer time limit: *{sched.get('answer_time_limit', 60)}s*"
-    )
+    text = f"📅 *SCHEDULE SETTINGS*\n\nStatus: {status_icon} {'ON' if sched.get('enabled') else 'OFF'}\nInterval: every *{sched.get('interval', 60)} min*\nType: *{sched.get('game_type', 'random').title()}*\nWindow: *{sched.get('window_start',18)}:00 – {sched.get('window_end',23)}:00*\n⏰ Answer time limit: *{sched.get('answer_time_limit', 60)}s*"
     return text, markup
 
 def show_schedule_panel(chat_id, edit_message_id=None):
-    """
-    Shows the schedule panel. If edit_message_id is provided, edits that message.
-    Otherwise, sends a new message and stores its ID.
-    """
     sched = load_scheduler()
     text, markup = _build_schedule_panel(chat_id)
-
     if edit_message_id:
-        # Edit the existing message
         try:
-            bot.edit_message_text(text, chat_id, edit_message_id,
-                                  reply_markup=markup, parse_mode="Markdown")
+            bot.edit_message_text(text, chat_id, edit_message_id, reply_markup=markup, parse_mode="Markdown")
             return
         except Exception as e:
             print(f"Failed to edit schedule panel: {e}")
-            # Fall through to send a new one
-
-    # Send new message and store its ID
     msg = bot.send_message(chat_id, text, reply_markup=markup, parse_mode="Markdown")
     sched["schedule_message_id"] = msg.message_id
     save_scheduler(sched)
@@ -515,25 +438,15 @@ def show_stats(chat_id):
         bot.send_message(chat_id, "📊 No stats yet.")
         return
     users = data[chat_str]
-    total_games  = sum(u.get("games_played", 0) for u in users.values())
-    total_pts    = sum(u.get("alltime_points", 0) for u in users.values())
-    most_active  = max(users.values(), key=lambda u: u.get("games_played", 0), default=None)
-    top_scorer   = max(users.values(), key=lambda u: u.get("alltime_points", 0), default=None)
-    best_streak  = max(users.values(), key=lambda u: u.get("best_streak", 0), default=None)
-    bot.send_message(
-        chat_id,
-        f"📊 *GROUP STATS*\n\n"
-        f"👥 Tracked members: {len(users)}\n"
-        f"🎮 Total games played: {total_games}\n"
-        f"💰 Total points distributed: {total_pts}\n"
-        f"🏃 Most active: {most_active.get('username','?')} ({most_active.get('games_played',0)} games)\n"
-        f"🏆 Top scorer: {top_scorer.get('username','?')} ({top_scorer.get('alltime_points',0)} pts)\n"
-        f"🔥 Best streak: {best_streak.get('username','?')} ({best_streak.get('best_streak',0)} in a row)",
-        parse_mode="Markdown"
-    )
+    total_games = sum(u.get("games_played", 0) for u in users.values())
+    total_pts = sum(u.get("alltime_points", 0) for u in users.values())
+    most_active = max(users.values(), key=lambda u: u.get("games_played", 0), default=None)
+    top_scorer = max(users.values(), key=lambda u: u.get("alltime_points", 0), default=None)
+    best_streak = max(users.values(), key=lambda u: u.get("best_streak", 0), default=None)
+    bot.send_message(chat_id, f"📊 *GROUP STATS*\n\n👥 Tracked members: {len(users)}\n🎮 Total games played: {total_games}\n💰 Total points distributed: {total_pts}\n🏃 Most active: {most_active.get('username','?')} ({most_active.get('games_played',0)} games)\n🏆 Top scorer: {top_scorer.get('username','?')} ({top_scorer.get('alltime_points',0)} pts)\n🔥 Best streak: {best_streak.get('username','?')} ({best_streak.get('best_streak',0)} in a row)", parse_mode="Markdown")
 
 # ---------------------------------------------------------------------------
-# WEEKLY RECAP
+# WEEKLY RECAP & MORNING MESSAGE (Combined tags)
 # ---------------------------------------------------------------------------
 
 def send_weekly_recap(bot):
@@ -547,28 +460,20 @@ def send_weekly_recap(bot):
                 top3 += f"{medals[rank-1]} {username} — {points} pts\n"
         else:
             top3 = "No scores yet this month!\n"
-        msg = (
-            f"📊 *WEEKLY RECAP*\n\n"
-            f"🏆 *Monthly Top 3:*\n{top3}\n"
-            f"Keep up the great work, family! 🙏🔥"
-        )
+        msg = f"📊 *WEEKLY RECAP*\n\n🏆 *Monthly Top 3:*\n{top3}\nKeep up the great work, family! 🙏🔥"
         try:
             bot.send_message(group_id, msg, parse_mode="Markdown")
         except Exception as e:
             print(f"Weekly recap failed for {group_id}: {e}")
 
-# ---------------------------------------------------------------------------
-# MORNING MESSAGE
-# ---------------------------------------------------------------------------
-
 def send_morning_message(bot):
     try:
         print("🌅 send_morning_message() called")
-        now     = local_now()
+        now = local_now()
         weekday = now.strftime("%A")
-        date    = now.strftime("%d %B %Y")
-        quote   = database.get_random_quote()
-        groups  = database.get_all_groups()
+        date = now.strftime("%d %B %Y")
+        quote = database.get_random_quote()
+        groups = database.get_all_groups()
         print(f"📊 Found {len(groups)} groups")
 
         for group_id in groups:
@@ -602,18 +507,28 @@ def send_morning_message(bot):
                     f"Let's have a great day! 🙏🔥"
                 )
 
-                # Send core message first
-                bot.send_message(group_id, msg, parse_mode="Markdown")
-                print(f"✅ Morning core sent to {group_id}")
-
-                # Then send tag line separately to avoid length limits
+                # --- COMBINED TAGS (same message) ---
                 members = database.get_all_members(group_id)
                 if members:
+                    # Build full tag line
                     tag_line = "🌱 _Sending love to the whole family_ 🌱\n" + " ".join(
                         [f"[{name}](tg://user?id={uid})" for uid, name in members]
                     )
-                    bot.send_message(group_id, tag_line, parse_mode="Markdown")
-                    print(f"✅ Morning tag line sent to {group_id}")
+                    full_msg = msg + "\n\n" + tag_line
+                    # If too long, truncate mentions
+                    if len(full_msg) > 4096:
+                        truncated = members[:50]
+                        tag_line_trunc = "🌱 _Sending love to the whole family_ 🌱\n" + " ".join(
+                            [f"[{name}](tg://user?id={uid})" for uid, name in truncated]
+                        )
+                        if len(members) > 50:
+                            tag_line_trunc += f"\n_and {len(members)-50} more..._"
+                        full_msg = msg + "\n\n" + tag_line_trunc
+                    bot.send_message(group_id, full_msg, parse_mode="Markdown")
+                else:
+                    bot.send_message(group_id, msg, parse_mode="Markdown")
+
+                print(f"✅ Morning message sent to {group_id}")
             except Exception as e:
                 print(f"❌ Morning message failed for {group_id}: {e}")
                 database.log_error_to_admin(bot, "Morning Message", e)
@@ -628,7 +543,7 @@ def send_morning_message(bot):
         database.log_error_to_admin(bot, "Morning Message Overall", e)
 
 # ---------------------------------------------------------------------------
-# BROADCAST HELPERS
+# BROADCAST HELPERS (Always tag)
 # ---------------------------------------------------------------------------
 
 def _send_pending_broadcasts(bot):
@@ -639,7 +554,20 @@ def _send_pending_broadcasts(bot):
     for broadcast in pending:
         success = True
         sched = load_scheduler()
+        # We always tag, so we don't need to check a flag, but we keep it for backward compatibility.
         tag_all = sched.get(f"broadcast_tagall_{broadcast['send_time']}", False)
+        # If no flag, we default to True because we want all broadcasts to tag.
+        # But we'll set it to True for all new broadcasts, and for old ones the flag might be False.
+        # For robustness, we'll force tag_all to True for any broadcast that doesn't have the flag.
+        # Actually, we removed the flag from the creation, so all new broadcasts will have the flag set to True.
+        # However, we need to check if the flag was set at all. If not, we force it.
+        if f"broadcast_tagall_{broadcast['send_time']}" not in sched:
+            tag_all = True
+            sched[f"broadcast_tagall_{broadcast['send_time']}"] = True
+            save_scheduler(sched)
+        else:
+            tag_all = sched[f"broadcast_tagall_{broadcast['send_time']}"]
+        
         if tag_all:
             print(f"   → Tag-all enabled for broadcast {broadcast['id']}")
         
@@ -712,6 +640,8 @@ def handle_document(message):
         response.raise_for_status()
         content = response.content.decode('utf-8')
         filename = message.document.file_name.lower()
+        
+        # Parse the file
         if filename.endswith('.json'):
             import json
             new_questions = json.loads(content)
@@ -723,15 +653,60 @@ def handle_document(message):
         else:
             bot.reply_to(message, "❌ Unsupported file format. Use JSON or CSV.")
             return
-        trivia = database.load_json(config.TRIVIA_DB, [])
-        existing_ids = {q["id"] for q in trivia}
-        new_id = max(existing_ids) + 1 if existing_ids else 1
+        
+        # Determine category from the first question
+        if not new_questions:
+            bot.reply_to(message, "❌ No questions found in file.")
+            return
+        cat = new_questions[0].get('category')
+        if not cat:
+            bot.reply_to(message, "❌ Missing 'category' field in questions.")
+            return
+        
+        # Find the correct filename for this category
+        filename = config.TRIVIA_CATEGORY_FILES.get(cat)
+        if not filename:
+            bot.reply_to(message, f"❌ Unknown category: {cat}. Supported: {', '.join(config.TRIVIA_CATEGORY_FILES.keys())}")
+            return
+        
+        # Download existing file from generated branch
+        url = f"https://api.github.com/repos/{config.GITHUB_REPO}/contents/{config.TRIVIA_REMOTE_PATH}/{filename}?ref={config.TRIVIA_BRANCH}"
+        headers = {"Authorization": f"token {config.GITHUB_TOKEN}"}
+        resp = requests.get(url, headers=headers)
+        existing_data = []
+        sha = None
+        if resp.status_code == 200:
+            content_data = resp.json()
+            decoded = base64.b64decode(content_data['content']).decode('utf-8')
+            existing_data = json.loads(decoded)
+            sha = content_data['sha']
+        else:
+            # File might not exist yet – we'll create it
+            pass
+        
+        # Merge new questions with new IDs
+        max_id = max([q['id'] for q in existing_data], default=0)
         for q in new_questions:
-            q["id"] = new_id
-            new_id += 1
-            trivia.append(q)
-        database.save_json(bot, config.TRIVIA_DB, trivia)
-        bot.reply_to(message, f"✅ Added {len(new_questions)} new trivia questions!")
+            max_id += 1
+            q['id'] = max_id
+            existing_data.append(q)
+        
+        # Upload back to generated branch
+        payload = {
+            "message": f"Add {len(new_questions)} trivia questions to {cat}",
+            "content": base64.b64encode(json.dumps(existing_data, indent=2).encode()).decode(),
+            "branch": config.TRIVIA_BRANCH,
+        }
+        if sha:
+            payload["sha"] = sha
+        put_resp = requests.put(f"https://api.github.com/repos/{config.GITHUB_REPO}/contents/{config.TRIVIA_REMOTE_PATH}/{filename}", headers=headers, json=payload)
+        if put_resp.status_code in (200, 201):
+            bot.reply_to(message, f"✅ Added {len(new_questions)} questions to {cat} category on the generated branch.")
+            # Clear cache so next trivia game loads fresh
+            database.reload_trivia()
+        else:
+            bot.reply_to(message, f"❌ Failed to upload: {put_resp.text}")
+        
         database.save_json(bot, "upload_state.json", {"pending": False})
     except Exception as e:
         bot.reply_to(message, f"❌ Error: {e}")
@@ -983,8 +958,9 @@ def handle_all_messages(message):
 
     elif cmd == '/uploadtrivia' and is_admin(user_id):
         bot.reply_to(message, "📤 Send me a JSON or CSV file with trivia questions.\n\n"
-                              "JSON format: `[{\"category\":\"Gaming\",\"question\":\"...\",\"options\":[\"A\",\"B\",\"C\",\"D\"],\"answer\":\"A\"}]`\n"
-                              "CSV format: `category,question,optionA,optionB,optionC,optionD,answer`")
+                              "The file should contain questions for a single category.\n"
+                              "Use the 'category' field to indicate which category.\n"
+                              "Supported formats: JSON or CSV.")
         database.save_json(bot, "upload_state.json", {"user_id": user_id, "chat_id": chat_id, "pending": True})
         return
 
@@ -992,7 +968,7 @@ def handle_all_messages(message):
         if len(args) < 2:
             bot.reply_to(message, "Usage: /broadcast [time] [message]\n\n"
                                   "Time format: '2024-12-25 08:00' (UTC+2)\n"
-                                  "Example: /broadcast 2024-12-25 08:00 --tagall Merry Christmas everyone!")
+                                  "Example: /broadcast 2024-12-25 08:00 Merry Christmas everyone!")
             return
         time_str = args[0] + " " + args[1]
         tz = timezone(timedelta(hours=2))
@@ -1011,10 +987,8 @@ def handle_all_messages(message):
             bot.reply_to(message, "❌ Please provide a message.")
             return
         
-        tag_all = False
-        if "--tagall" in message_text:
-            tag_all = True
-            message_text = message_text.replace("--tagall", "").strip()
+        # Always tag all members – removed flag check
+        tag_all = True
         
         database.add_broadcast(bot, None, message_text, send_time)
         sched = load_scheduler()
@@ -1040,7 +1014,6 @@ def handle_all_messages(message):
         database.track_member(bot, chat_id, user_id, username)
         bot.reply_to(message, "✅ This group is now tracked in the database.")
 
-    # NEW: Generate all banners manually
     elif cmd == '/generateall' and is_admin(user_id):
         bot.reply_to(message, "🖼️ Starting background banner generation for all users...")
         def generate_in_background():
@@ -1362,7 +1335,7 @@ def handle_all_callbacks(call):
                 bot.send_message(chat_id, "🔍 Checking for missing images...")
                 notify_missing_images()
                 bot.send_message(chat_id, "✅ Check complete. Admin has been notified.")
-            elif action == "trackgroup":  # NEW
+            elif action == "trackgroup":
                 bot.answer_callback_query(call.id)
                 database.track_member(bot, chat_id, user_id, username)
                 bot.send_message(chat_id, "✅ This group is now tracked in the database.")
@@ -1485,10 +1458,7 @@ def handle_all_callbacks(call):
                 return
 
             home_idx, away_idx, _, _, _ = graphics.detect_fixtures_columns(rows)
-            header_offset = 1 if (
-                "home" in str(rows[0][home_idx]).lower() or
-                rows[0][0].lower() in ["md", "matchday"]
-            ) else 0
+            header_offset = 1 if ("home" in str(rows[0][home_idx]).lower() or rows[0][0].lower() in ["md", "matchday"]) else 0
 
             seen = set()
             matchdays = []
@@ -1643,7 +1613,7 @@ def _serve_fixtures_page(chat_id, message_id, player, context, status, page):
             img.close()
 
 # ---------------------------------------------------------------------------
-# BROADCAST CHECKER (with top-level safety)
+# BROADCAST CHECKER
 # ---------------------------------------------------------------------------
 
 broadcast_checker_thread = None
@@ -1664,7 +1634,7 @@ def broadcast_checker():
         database.log_error_to_admin(bot, "Broadcast Checker FATAL", fatal)
 
 # ---------------------------------------------------------------------------
-# BACKGROUND SCHEDULER (with top-level safety)
+# BACKGROUND SCHEDULER
 # ---------------------------------------------------------------------------
 
 scheduler_thread = None
@@ -1762,7 +1732,7 @@ def background_scheduler():
         database.log_error_to_admin(bot, "Scheduler FATAL", fatal)
 
 # ---------------------------------------------------------------------------
-# THREAD SUPERVISOR (restarts dead threads)
+# THREAD SUPERVISOR
 # ---------------------------------------------------------------------------
 
 def start_broadcast_checker():
@@ -1785,7 +1755,6 @@ def thread_supervisor():
     """Monitors critical threads and restarts them if they die."""
     while True:
         try:
-            # Broadcast checker
             if not broadcast_checker_thread or not broadcast_checker_thread.is_alive():
                 print("⚠️ Broadcast checker thread is dead – restarting...")
                 start_broadcast_checker()
@@ -1794,7 +1763,6 @@ def thread_supervisor():
                 except:
                     pass
 
-            # Scheduler
             if not scheduler_thread or not scheduler_thread.is_alive():
                 print("⚠️ Scheduler thread is dead – restarting...")
                 start_scheduler()
@@ -2012,7 +1980,7 @@ def register_commands():
         telebot.types.BotCommand("setschedule",  "🕐 Configure auto-game scheduler"),
         telebot.types.BotCommand("mute",         "🔇 Mute a user"),
         telebot.types.BotCommand("unmute",       "🔊 Unmute a user"),
-        telebot.types.BotCommand("broadcast",    "📢 Schedule a broadcast"),
+        telebot.types.BotCommand("broadcast",    "📢 Schedule a broadcast (auto-tags all)"),
         telebot.types.BotCommand("forcebroadcast", "📤 Force-send pending broadcasts"),
         telebot.types.BotCommand("checknow",     "🔄 Manually check for pending broadcasts"),
         telebot.types.BotCommand("uploadtrivia", "📤 Upload trivia questions"),
@@ -2135,7 +2103,6 @@ def show_my_stats(message, target_id=None, target_name=None):
 # ---------------------------------------------------------------------------
 
 def check_startup_fallbacks():
-    """Runs once on startup to check if any scheduled tasks were missed."""
     print("🔍 Checking startup fallbacks...")
     now = local_now()
     sched = load_scheduler()
@@ -2160,14 +2127,11 @@ if __name__ == "__main__":
     database.cleanup_expired_mutes(bot)
     check_startup_fallbacks()
 
-    # Start the critical threads (they will be supervised)
     start_broadcast_checker()
     start_scheduler()
 
-    # Start the supervisor thread (daemon)
     threading.Thread(target=thread_supervisor, daemon=True).start()
 
-    # Start non-critical threads
     threading.Thread(target=notify_missing_images, daemon=True).start()
 
     print("✅ Bot is live!")
