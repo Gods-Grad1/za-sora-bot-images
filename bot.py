@@ -11,6 +11,7 @@ import config
 import database
 import graphics
 import games
+import profile_banner  # <-- NEW
 
 # Force no proxy
 os.environ['HTTP_PROXY'] = ''
@@ -432,14 +433,31 @@ def _build_schedule_panel(chat_id):
 
     toggle_label = "❌ Disable" if sched.get("enabled") else "✅ Enable"
     markup.add(telebot.types.InlineKeyboardButton(toggle_label, callback_data="sched_toggle"))
+    
+    # Interval buttons
     markup.add(*[
         telebot.types.InlineKeyboardButton(f"⏱ {m}min", callback_data=f"sched_interval_{m}")
         for m in config.SCHEDULE_INTERVALS
     ])
+    
+    # Time limit buttons
     markup.add(*[
         telebot.types.InlineKeyboardButton(f"⏰ {s}s limit", callback_data=f"sched_timelimit_{s}")
         for s in [30, 45, 60, 90, 120]
     ])
+    
+    # Window start/end buttons (NEW)
+    start = sched.get('window_start', 18)
+    end   = sched.get('window_end', 23)
+    markup.add(
+        telebot.types.InlineKeyboardButton(f"🕐 Start: {start}:00 ▲", callback_data="sched_window_start_up"),
+        telebot.types.InlineKeyboardButton(f"Start: {start}:00 ▼", callback_data="sched_window_start_down"),
+        telebot.types.InlineKeyboardButton(f"End: {end}:00 ▲", callback_data="sched_window_end_up"),
+        telebot.types.InlineKeyboardButton(f"End: {end}:00 ▼", callback_data="sched_window_end_down"),
+        row_width=4
+    )
+    
+    # Game type buttons
     markup.add(
         telebot.types.InlineKeyboardButton("🎮 Character", callback_data="sched_type_character"),
         telebot.types.InlineKeyboardButton("🎬 Year",      callback_data="sched_type_year"),
@@ -458,7 +476,6 @@ def _build_schedule_panel(chat_id):
         f"Window: *{sched.get('window_start',18)}:00 – {sched.get('window_end',23)}:00*\n"
         f"⏰ Answer time limit: *{sched.get('answer_time_limit', 60)}s*"
     )
-
     return text, markup
 
 def show_schedule_panel(chat_id, edit_message_id=None):
@@ -608,18 +625,22 @@ def send_morning_message(bot):
         database.log_error_to_admin(bot, "Morning Message Overall", e)
 
 # ---------------------------------------------------------------------------
-# BROADCAST HELPERS
+# BROADCAST HELPERS (MODIFIED: Supports --tagall flag)
 # ---------------------------------------------------------------------------
 
 def _send_pending_broadcasts(bot):
-    """Sends all pending broadcasts immediately, marks sent only if all targets succeed."""
     pending = database.get_pending_broadcasts()
     print(f"📢 [BROADCAST] Fetched {len(pending)} pending broadcasts.")
     if not pending:
         return
     for broadcast in pending:
-        print(f"   → Processing broadcast ID {broadcast['id']}, chat_id={broadcast['chat_id']}")
         success = True
+        # Check if this broadcast needs tagging
+        sched = load_scheduler()
+        tag_all = sched.get(f"broadcast_tagall_{broadcast['send_time']}", False)
+        if tag_all:
+            print(f"   → Tag-all enabled for broadcast {broadcast['id']}")
+        
         if broadcast["chat_id"] is None:
             groups = database.get_all_groups()
             print(f"   → Global broadcast – groups found: {len(groups)}")
@@ -629,7 +650,21 @@ def _send_pending_broadcasts(bot):
             else:
                 for gid in groups:
                     try:
-                        bot.send_message(gid, broadcast["message"], parse_mode="Markdown")
+                        msg_to_send = broadcast["message"]
+                        if tag_all:
+                            members = database.get_all_members(gid)
+                            if members:
+                                tag_line = " ".join([f"[{name}](tg://user?id={uid})" for uid, name in members])
+                                # If combined message is too long, send separately
+                                if len(msg_to_send) + len(tag_line) + 20 > 4096:
+                                    bot.send_message(gid, msg_to_send, parse_mode="Markdown")
+                                    bot.send_message(gid, f"📢 *Tagging everyone:*\n{tag_line}", parse_mode="Markdown")
+                                else:
+                                    bot.send_message(gid, f"{msg_to_send}\n\n📢 *Tagging everyone:*\n{tag_line}", parse_mode="Markdown")
+                            else:
+                                bot.send_message(gid, msg_to_send, parse_mode="Markdown")
+                        else:
+                            bot.send_message(gid, msg_to_send, parse_mode="Markdown")
                         print(f"   ✅ Sent to group {gid}")
                     except Exception as e:
                         print(f"   ❌ Failed to send to {gid}: {e}")
@@ -641,9 +676,13 @@ def _send_pending_broadcasts(bot):
             except Exception as e:
                 print(f"   ❌ Failed: {e}")
                 success = False
-
+        
         if success:
             database.mark_broadcast_sent(bot, broadcast["id"])
+            # Clean up the tag_all flag
+            if tag_all:
+                sched.pop(f"broadcast_tagall_{broadcast['send_time']}", None)
+                save_scheduler(sched)
             print(f"   ✅ Broadcast ID {broadcast['id']} marked as sent.")
         else:
             print(f"   ⚠️ Broadcast ID {broadcast['id']} NOT marked – will retry later.")
@@ -948,7 +987,7 @@ def handle_all_messages(message):
         if len(args) < 2:
             bot.reply_to(message, "Usage: /broadcast [time] [message]\n\n"
                                   "Time format: '2024-12-25 08:00' (UTC+2)\n"
-                                  "Example: /broadcast 2024-12-25 08:00 Merry Christmas everyone!")
+                                  "Example: /broadcast 2024-12-25 08:00 --tagall Merry Christmas everyone!")
             return
         time_str = args[0] + " " + args[1]
         tz = timezone(timedelta(hours=2))
@@ -966,7 +1005,19 @@ def handle_all_messages(message):
         if not message_text:
             bot.reply_to(message, "❌ Please provide a message.")
             return
+        
+        # Check for --tagall flag
+        tag_all = False
+        if "--tagall" in message_text:
+            tag_all = True
+            message_text = message_text.replace("--tagall", "").strip()
+        
         database.add_broadcast(bot, None, message_text, send_time)
+        # Store the tag_all flag in scheduler state
+        sched = load_scheduler()
+        sched[f"broadcast_tagall_{send_time}"] = tag_all
+        save_scheduler(sched)
+        
         bot.reply_to(message, f"✅ Global broadcast scheduled for {time_str}.")
         if send_time - time.time() <= 10:
             bot.reply_to(message, "📤 Sending broadcast now (within 10 seconds)...")
@@ -986,6 +1037,34 @@ def handle_all_messages(message):
         database.track_member(bot, chat_id, user_id, username)
         bot.reply_to(message, "✅ This group is now tracked in the database.")
     # --- End debug commands ---
+
+    elif cmd == '/profile':
+        user_id = message.from_user.id
+        username = message.from_user.username or message.from_user.first_name
+        chat_id = message.chat.id
+        
+        status_msg = bot.reply_to(message, "🎨 Generating your profile banner...")
+        
+        def generate_and_send():
+            try:
+                result = profile_banner.generate_profile_banner(bot, user_id, username)
+                if result:
+                    if result.startswith("http"):
+                        bot.send_photo(chat_id, result, caption="🎨 *Your Profile Banner*", parse_mode="Markdown")
+                    else:
+                        with open(result, 'rb') as f:
+                            bot.send_photo(chat_id, f, caption="🎨 *Your Profile Banner*", parse_mode="Markdown")
+                else:
+                    bot.reply_to(message, "❌ Failed to generate your profile banner.")
+            except Exception as e:
+                bot.reply_to(message, f"❌ Error: {e}")
+            finally:
+                try:
+                    bot.delete_message(chat_id, status_msg.message_id)
+                except:
+                    pass
+        
+        threading.Thread(target=generate_and_send, daemon=True).start()
 
     elif cmd == '/addquote' and chat_id == user_id and is_admin(user_id):
         if not args:
@@ -1337,6 +1416,16 @@ def handle_all_callbacks(call):
                 sched["answer_time_limit"] = int(action.replace("timelimit_", ""))
                 save_scheduler(sched)
                 bot.answer_callback_query(call.id, f"Time limit set to {sched['answer_time_limit']}s", show_alert=True)
+            elif action.startswith("window_start_"):
+                delta = 1 if "up" in action else -1
+                sched["window_start"] = max(0, min(23, sched.get("window_start", 18) + delta))
+                save_scheduler(sched)
+                bot.answer_callback_query(call.id, f"Start set to {sched['window_start']}:00", show_alert=True)
+            elif action.startswith("window_end_"):
+                delta = 1 if "up" in action else -1
+                sched["window_end"] = max(1, min(24, sched.get("window_end", 23) + delta))
+                save_scheduler(sched)
+                bot.answer_callback_query(call.id, f"End set to {sched['window_end']}:00", show_alert=True)
 
             # Edit the existing schedule message instead of sending a new one
             msg_id = sched.get("schedule_message_id")
@@ -1928,6 +2017,7 @@ def register_commands():
         telebot.types.BotCommand("powerups",     "⚡ View your power-ups"),
         telebot.types.BotCommand("table",        "📋 League standings"),
         telebot.types.BotCommand("fixtures",     "📅 Match fixtures"),
+        telebot.types.BotCommand("profile",      "🎨 Your profile banner"),
     ]
 
     admin_commands = public_commands + [
