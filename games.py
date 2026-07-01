@@ -238,7 +238,7 @@ def _check_one_game_lock(bot, chat_id, user_id, game_type=None, category=None):
     return True
 
 # ---------------------------------------------------------------------------
-# SEND HELPERS (MODIFIED: Hint button hidden for character games)
+# SEND HELPERS (Hint button hidden for character games)
 # ---------------------------------------------------------------------------
 
 def _game_markup(chat_id, game_type):
@@ -316,7 +316,7 @@ def send_trivia_category_picker(bot, chat_id):
                      reply_markup=markup, parse_mode="Markdown")
 
 # ---------------------------------------------------------------------------
-# HINT SYSTEM (MODIFIED: Blocks hints for character games)
+# HINT SYSTEM (Blocks hints for character games)
 # ---------------------------------------------------------------------------
 
 def _get_hint(session, hint_num):
@@ -680,14 +680,17 @@ def _start_timer(bot, chat_id, seconds):
     threading.Thread(target=timeout, daemon=True).start()
 
 # ---------------------------------------------------------------------------
-# TRIVIA GAME
+# TRIVIA GAME (UPDATED to use new loader)
 # ---------------------------------------------------------------------------
 
 def start_trivia_game(bot, chat_id, category=None, user_id=None):
     if user_id and _check_one_game_lock(bot, chat_id, user_id, game_type="trivia", category=category):
         return None
 
-    trivia_data = load_json_file(config.TRIVIA_DB)
+    # --- CHANGE: Use the new database loader ---
+    trivia_data = database.load_trivia_from_github()
+    # --------------------------------------------
+
     if not trivia_data:
         send_and_delete(bot, chat_id, "⚠️ Trivia database not found.")
         return None
