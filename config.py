@@ -47,8 +47,8 @@ MORNING_MSG_HOUR = 8
 MORNING_MSG_MIN  = 0
 DAILY_CHALLENGE_HOUR = 14
 DAILY_CHALLENGE_MIN  = 0
-SCHEDULER_WINDOW_START = 10   # <-- changed from 18 to 10
-SCHEDULER_WINDOW_END   = 23   # unchanged
+SCHEDULER_WINDOW_START = 10   # Changed from 18 to 10
+SCHEDULER_WINDOW_END   = 23
 
 # --- POINTS ECONOMY ---
 POINTS_CHARACTER_GAME  = 50
@@ -82,7 +82,7 @@ SCHEDULE_INTERVALS = [30, 60, 120, 240, 360]
 # --- SHOP ---
 SHOP_TITLE_DURATION_DAYS = 30
 
-# --- AUTO-DELETE DELAYS (new) ---
+# --- AUTO-DELETE DELAYS (NEW) ---
 AUTO_DELETE_DELAY      = 300    # 5 minutes (default)
 GAME_AUTO_DELETE_DELAY = 1800   # 30 minutes for game questions and time‑up warnings
 ADMIN_PANEL_DELAY      = 600    # 10 minutes for schedule/admin panels
