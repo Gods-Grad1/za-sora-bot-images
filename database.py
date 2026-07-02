@@ -16,6 +16,19 @@ GLOBAL_CHAT_ID = None
 _trivia_cache = None
 
 # ---------------------------------------------------------------------------
+# GLOBAL BOT INSTANCE (set once on startup)
+# ---------------------------------------------------------------------------
+
+_bot = None
+
+def set_bot(bot):
+    global _bot
+    _bot = bot
+
+def get_bot():
+    return _bot
+
+# ---------------------------------------------------------------------------
 # FILE LOCKS (for local JSON writes – fallback only)
 # ---------------------------------------------------------------------------
 
@@ -24,7 +37,8 @@ def get_lock(filepath):
         _file_locks[filepath] = threading.Lock()
     return _file_locks[filepath]
 
-def save_json(bot, filepath, data):
+def save_json(filepath, data):
+    """Local fallback save (not used for persistent data anymore)."""
     lock = get_lock(filepath)
     with lock:
         tmp_file = filepath + ".tmp"
@@ -35,9 +49,11 @@ def save_json(bot, filepath, data):
                 os.fsync(f.fileno())
             os.replace(tmp_file, filepath)
         except Exception as e:
-            log_error_to_admin(bot, "Atomic Save Fault", e)
+            if _bot:
+                log_error_to_admin(_bot, "Atomic Save Fault", e)
 
 def load_json(filepath, default_value):
+    """Local fallback load."""
     if not os.path.exists(filepath):
         with open(filepath, "w") as f:
             json.dump(default_value, f, indent=4)
@@ -50,8 +66,10 @@ def load_json(filepath, default_value):
 # REMOTE JSON (GitHub) – FOR PERSISTENT DATA
 # ---------------------------------------------------------------------------
 
-def load_remote_json(bot, filename, default_value):
+def load_remote_json(filename, default_value):
     """Downloads a JSON file from the generated branch's data folder."""
+    if not _bot:
+        return default_value
     url = f"https://raw.githubusercontent.com/{config.GITHUB_REPO}/{config.TRIVIA_BRANCH}/{config.GENERATED_DATA_PATH}/{filename}"
     try:
         r = requests.get(url, timeout=10)
@@ -62,7 +80,7 @@ def load_remote_json(bot, filename, default_value):
     except Exception as e:
         print(f"Error loading {filename} from GitHub: {e}")
     
-    # If all fails, fall back to local file
+    # Fallback to local file
     local_path = os.path.join(os.getcwd(), filename)
     if os.path.exists(local_path):
         try:
@@ -72,8 +90,11 @@ def load_remote_json(bot, filename, default_value):
             pass
     return default_value
 
-def save_remote_json(bot, filename, data):
+def save_remote_json(filename, data):
     """Uploads a JSON file to the generated branch's data folder."""
+    if not _bot:
+        print(f"Bot not set, cannot save {filename}")
+        return False
     url = f"https://api.github.com/repos/{config.GITHUB_REPO}/contents/{config.GENERATED_DATA_PATH}/{filename}"
     headers = {"Authorization": f"token {config.GITHUB_TOKEN}"}
     
@@ -123,7 +144,7 @@ def init_broadcast_db():
         conn.commit()
         conn.close()
 
-def add_broadcast(bot, chat_id, message, send_time):
+def add_broadcast(chat_id, message, send_time):
     with _broadcast_lock:
         conn = sqlite3.connect(BROADCAST_DB)
         c = conn.cursor()
@@ -141,7 +162,7 @@ def get_pending_broadcasts():
         conn.close()
         return [{"id": r[0], "chat_id": r[1], "message": r[2], "send_time": r[3]} for r in rows]
 
-def mark_broadcast_sent(bot, broadcast_id):
+def mark_broadcast_sent(broadcast_id):
     with _broadcast_lock:
         conn = sqlite3.connect(BROADCAST_DB)
         c = conn.cursor()
@@ -208,10 +229,13 @@ def reload_trivia():
     return load_trivia_from_github()
 
 # ---------------------------------------------------------------------------
-# REST OF DATABASE (Keep all existing functions)
+# LOGGING
 # ---------------------------------------------------------------------------
 
 def log_error_to_admin(bot, context, exception):
+    if not bot:
+        print(f"⚠️ {context}: {exception}")
+        return
     error_msg = f"⚠️ *BOT ERROR*\n📌 Context: {context}\n💥 `{str(exception)}`"
     print(error_msg)
     try:
@@ -219,7 +243,11 @@ def log_error_to_admin(bot, context, exception):
     except Exception as e:
         print(f"Failed to alert admin: {e}")
 
-def fetch_csv_cached(bot, url, duration=300):
+# ---------------------------------------------------------------------------
+# CSV CACHE
+# ---------------------------------------------------------------------------
+
+def fetch_csv_cached(url, duration=300):
     now = time.time()
     if url in CSV_DATA_CACHE:
         timestamp, data = CSV_DATA_CACHE[url]
@@ -233,10 +261,15 @@ def fetch_csv_cached(bot, url, duration=300):
         CSV_DATA_CACHE[url] = (now, rows)
         return rows
     except Exception as e:
-        log_error_to_admin(bot, "CSV Fetch Error", e)
+        if _bot:
+            log_error_to_admin(_bot, "CSV Fetch Error", e)
         if url in CSV_DATA_CACHE:
             return CSV_DATA_CACHE[url][1]
         return []
+
+# ---------------------------------------------------------------------------
+# USER DATA (Remote)
+# ---------------------------------------------------------------------------
 
 def _now_month_key():
     return datetime.datetime.now().strftime("%Y-%m")
@@ -285,15 +318,15 @@ def get_user(data, chat_str, user_str, username):
         u["username"] = username
     return u
 
-def track_member(bot, chat_id, user_id, username):
-    data = load_remote_json(bot, config.GROUP_DATA_FILE, {})
+def track_member(chat_id, user_id, username):
+    data = load_remote_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
     get_user(data, chat_str, user_str, username)
-    save_remote_json(bot, config.GROUP_DATA_FILE, data)
+    save_remote_json(config.GROUP_DATA_FILE, data)
 
 def get_all_members(chat_id):
-    data = load_remote_json(bot, config.GROUP_DATA_FILE, {})
+    data = load_remote_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     if chat_str not in data:
         return []
@@ -301,7 +334,7 @@ def get_all_members(chat_id):
 
 def get_all_groups():
     try:
-        data = load_remote_json(bot, config.GROUP_DATA_FILE, {})
+        data = load_remote_json(config.GROUP_DATA_FILE, {})
         return [int(cid) for cid in data.keys()]
     except Exception:
         return []
@@ -314,8 +347,8 @@ def get_streak_multiplier(streak):
             break
     return multiplier
 
-def reward_user(bot, chat_id, user_id, username, amount=50):
-    data = load_remote_json(bot, config.GROUP_DATA_FILE, {})
+def reward_user(chat_id, user_id, username, amount=50):
+    data = load_remote_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
     u = get_user(data, chat_str, user_str, username)
@@ -338,62 +371,62 @@ def reward_user(bot, chat_id, user_id, username, amount=50):
     u["yearly_points"][year_key] = u["yearly_points"].get(year_key, 0) + final
     u["games_played"] += 1
 
-    save_remote_json(bot, config.GROUP_DATA_FILE, data)
-    check_achievements(bot, chat_id, user_id, username)
+    save_remote_json(config.GROUP_DATA_FILE, data)
+    check_achievements(chat_id, user_id, username)
     return u["points"], u["streak"], multiplier, final
 
-def penalise_wrong(bot, chat_id, user_id, username):
-    data = load_remote_json(bot, config.GROUP_DATA_FILE, {})
+def penalise_wrong(chat_id, user_id, username):
+    data = load_remote_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
     u = get_user(data, chat_str, user_str, username)
     u["streak"] = 0
     u["games_played"] += 1
-    save_remote_json(bot, config.GROUP_DATA_FILE, data)
+    save_remote_json(config.GROUP_DATA_FILE, data)
 
-def deduct_points(bot, chat_id, user_id, username, amount):
-    data = load_remote_json(bot, config.GROUP_DATA_FILE, {})
+def deduct_points(chat_id, user_id, username, amount):
+    data = load_remote_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
     u = get_user(data, chat_str, user_str, username)
     u["points"] = max(0, u["points"] - amount)
-    save_remote_json(bot, config.GROUP_DATA_FILE, data)
+    save_remote_json(config.GROUP_DATA_FILE, data)
     return u["points"]
 
-def use_powerup(bot, chat_id, user_id, username, powerup_id):
-    data = load_remote_json(bot, config.GROUP_DATA_FILE, {})
+def use_powerup(chat_id, user_id, username, powerup_id):
+    data = load_remote_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
     u = get_user(data, chat_str, user_str, username)
     if u.get("powerups", {}).get(powerup_id, 0) > 0:
         u["powerups"][powerup_id] -= 1
-        save_remote_json(bot, config.GROUP_DATA_FILE, data)
+        save_remote_json(config.GROUP_DATA_FILE, data)
         return True
     return False
 
-def add_powerup(bot, chat_id, user_id, username, powerup_id, count=1):
-    data = load_remote_json(bot, config.GROUP_DATA_FILE, {})
+def add_powerup(chat_id, user_id, username, powerup_id, count=1):
+    data = load_remote_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
     u = get_user(data, chat_str, user_str, username)
     u.setdefault("powerups", {})
     u["powerups"][powerup_id] = u["powerups"].get(powerup_id, 0) + count
-    save_remote_json(bot, config.GROUP_DATA_FILE, data)
+    save_remote_json(config.GROUP_DATA_FILE, data)
 
-def unlock_badge(bot, chat_id, user_id, username, badge_id):
-    data = load_remote_json(bot, config.GROUP_DATA_FILE, {})
+def unlock_badge(chat_id, user_id, username, badge_id):
+    data = load_remote_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
     u = get_user(data, chat_str, user_str, username)
     if badge_id not in u.get("badges", []):
         u.setdefault("badges", [])
         u["badges"].append(badge_id)
-        save_remote_json(bot, config.GROUP_DATA_FILE, data)
+        save_remote_json(config.GROUP_DATA_FILE, data)
         return True
     return False
 
-def check_achievements(bot, chat_id, user_id, username):
-    data = load_remote_json(bot, config.GROUP_DATA_FILE, {})
+def check_achievements(chat_id, user_id, username):
+    data = load_remote_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
     u = get_user(data, chat_str, user_str, username)
@@ -412,29 +445,30 @@ def check_achievements(bot, chat_id, user_id, username):
             u["badges"].append(badge_id)
             unlocked.append(badge_id)
     if unlocked:
-        save_remote_json(bot, config.GROUP_DATA_FILE, data)
-        badge_names = [config.ACHIEVEMENTS[b]["icon"] + " " + config.ACHIEVEMENTS[b]["name"] for b in unlocked]
-        bot.send_message(chat_id, f"🏅 *ACHIEVEMENT UNLOCKED!*\n\n{username} unlocked: {', '.join(badge_names)}!", parse_mode="Markdown")
+        save_remote_json(config.GROUP_DATA_FILE, data)
+        if _bot:
+            badge_names = [config.ACHIEVEMENTS[b]["icon"] + " " + config.ACHIEVEMENTS[b]["name"] for b in unlocked]
+            _bot.send_message(chat_id, f"🏅 *ACHIEVEMENT UNLOCKED!*\n\n{username} unlocked: {', '.join(badge_names)}!", parse_mode="Markdown")
     return unlocked
 
 def load_mutes():
-    return load_remote_json(bot, config.MUTE_FILE, {})
+    return load_remote_json(config.MUTE_FILE, {})
 
-def save_mutes(bot, data):
-    save_remote_json(bot, config.MUTE_FILE, data)
+def save_mutes(data):
+    save_remote_json(config.MUTE_FILE, data)
 
-def mute_user(bot, chat_id, user_id, username, duration_seconds):
+def mute_user(chat_id, user_id, username, duration_seconds):
     data = load_mutes()
     key = f"{chat_id}_{user_id}"
     data[key] = {"username": username, "expires": time.time() + duration_seconds, "chat_id": chat_id, "user_id": user_id}
-    save_mutes(bot, data)
+    save_mutes(data)
 
-def unmute_user(bot, chat_id, user_id):
+def unmute_user(chat_id, user_id):
     data = load_mutes()
     key = f"{chat_id}_{user_id}"
     if key in data:
         del data[key]
-        save_mutes(bot, data)
+        save_mutes(data)
         return True
     return False
 
@@ -448,7 +482,7 @@ def is_muted(chat_id, user_id):
         return False
     return True
 
-def cleanup_expired_mutes(bot):
+def cleanup_expired_mutes():
     data = load_mutes()
     changed = False
     now = time.time()
@@ -457,10 +491,10 @@ def cleanup_expired_mutes(bot):
             del data[key]
             changed = True
     if changed:
-        save_mutes(bot, data)
+        save_mutes(data)
 
 def get_leaderboard(chat_id, mode="monthly", top_n=10):
-    data = load_remote_json(bot, config.GROUP_DATA_FILE, {})
+    data = load_remote_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     if chat_str not in data:
         return []
@@ -485,8 +519,8 @@ def _get_active_title(u):
         return title
     return None
 
-def purchase_item(bot, chat_id, user_id, username, item_id):
-    data = load_remote_json(bot, config.GROUP_DATA_FILE, {})
+def purchase_item(chat_id, user_id, username, item_id):
+    data = load_remote_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
     u = get_user(data, chat_str, user_str, username)
@@ -498,7 +532,7 @@ def purchase_item(bot, chat_id, user_id, username, item_id):
         u["points"] -= powerup["cost"]
         u.setdefault("powerups", {})
         u["powerups"][item_id] = u["powerups"].get(item_id, 0) + 1
-        save_remote_json(bot, config.GROUP_DATA_FILE, data)
+        save_remote_json(config.GROUP_DATA_FILE, data)
         return True, f"✅ Purchased *{powerup['emoji']} {powerup['name']}*!"
 
     item = next((i for i in config.SHOP_TITLES if i["id"] == item_id), None)
@@ -516,34 +550,34 @@ def purchase_item(bot, chat_id, user_id, username, item_id):
         import random
         prize = random.randint(10, 200)
         u["points"] += prize
-        save_remote_json(bot, config.GROUP_DATA_FILE, data)
+        save_remote_json(config.GROUP_DATA_FILE, data)
         return True, f"🎁 Mystery Box opened! You won *{prize} points*!"
     else:
         u["title"] = item["name"]
         u["title_expires"] = time.time() + (config.SHOP_TITLE_DURATION_DAYS * 86400)
 
-    save_remote_json(bot, config.GROUP_DATA_FILE, data)
+    save_remote_json(config.GROUP_DATA_FILE, data)
     return True, f"✅ Purchased *{item['name']}*!"
 
-def use_hint_token(bot, chat_id, user_id, username):
-    data = load_remote_json(bot, config.GROUP_DATA_FILE, {})
+def use_hint_token(chat_id, user_id, username):
+    data = load_remote_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
     u = get_user(data, chat_str, user_str, username)
     if u.get("hint_tokens", 0) > 0:
         u["hint_tokens"] -= 1
-        save_remote_json(bot, config.GROUP_DATA_FILE, data)
+        save_remote_json(config.GROUP_DATA_FILE, data)
         return True
     return False
 
-def check_and_run_monthly_reset(bot):
-    state = load_remote_json(bot, config.STATE_FILE, {})
+def check_and_run_monthly_reset():
+    state = load_remote_json(config.STATE_FILE, {})
     now = datetime.datetime.now()
     last = state.get("last_monthly_reset", "")
     curr = now.strftime("%Y-%m")
     if last == curr:
         return
-    data = load_remote_json(bot, config.GROUP_DATA_FILE, {})
+    data = load_remote_json(config.GROUP_DATA_FILE, {})
     prev_month = (now.replace(day=1) - datetime.timedelta(days=1)).strftime("%Y-%m")
     for chat_str, users in data.items():
         scores = []
@@ -559,21 +593,22 @@ def check_and_run_monthly_reset(bot):
                 medal = ["🥇", "🥈", "🥉"][i-1]
                 msg += f"{medal} {name} — {pts} pts\n"
             msg += "\nMonthly scores have been reset. New month, new battle! 🔥"
-            try:
-                bot.send_message(int(chat_str), msg, parse_mode="Markdown")
-            except Exception as e:
-                print(f"Monthly reset failed for {chat_str}: {e}")
+            if _bot:
+                try:
+                    _bot.send_message(int(chat_str), msg, parse_mode="Markdown")
+                except Exception as e:
+                    print(f"Monthly reset failed for {chat_str}: {e}")
     state["last_monthly_reset"] = curr
-    save_remote_json(bot, config.STATE_FILE, state)
+    save_remote_json(config.STATE_FILE, state)
 
-def check_and_run_yearly_reset(bot):
-    state = load_remote_json(bot, config.STATE_FILE, {})
+def check_and_run_yearly_reset():
+    state = load_remote_json(config.STATE_FILE, {})
     now = datetime.datetime.now()
     curr = now.strftime("%Y")
     last = state.get("last_yearly_reset", "")
     if last == curr or now.month != 1 or now.day != 1:
         return
-    data = load_remote_json(bot, config.GROUP_DATA_FILE, {})
+    data = load_remote_json(config.GROUP_DATA_FILE, {})
     prev_year = str(now.year - 1)
     for chat_str, users in data.items():
         scores = []
@@ -585,41 +620,42 @@ def check_and_run_yearly_reset(bot):
         if scores:
             winner_name, winner_pts = scores[0]
             msg = f"🎊 *Yearly Champion — {prev_year}*\n\n👑 *{winner_name}* dominated with *{winner_pts} points*!\n\nHappy New Year! Make it count! 🚀"
-            try:
-                bot.send_message(int(chat_str), msg, parse_mode="Markdown")
-            except Exception as e:
-                print(f"Yearly reset failed for {chat_str}: {e}")
+            if _bot:
+                try:
+                    _bot.send_message(int(chat_str), msg, parse_mode="Markdown")
+                except Exception as e:
+                    print(f"Yearly reset failed for {chat_str}: {e}")
     state["last_yearly_reset"] = curr
-    save_remote_json(bot, config.STATE_FILE, state)
+    save_remote_json(config.STATE_FILE, state)
 
 def load_quotes():
-    return load_remote_json(bot, config.QUOTES_FILE, [])
+    return load_remote_json(config.QUOTES_FILE, [])
 
-def save_quotes(bot, quotes):
-    save_remote_json(bot, config.QUOTES_FILE, quotes)
+def save_quotes(quotes):
+    save_remote_json(config.QUOTES_FILE, quotes)
 
-def add_quote(bot, text, author="CHJN"):
+def add_quote(text, author="CHJN"):
     quotes = load_quotes()
     next_id = max((q["id"] for q in quotes), default=0) + 1
     quotes.append({"id": next_id, "text": text, "author": author})
-    save_quotes(bot, quotes)
+    save_quotes(quotes)
     return next_id
 
-def delete_quote(bot, quote_id):
+def delete_quote(quote_id):
     quotes = load_quotes()
     before = len(quotes)
     quotes = [q for q in quotes if q["id"] != quote_id]
     if len(quotes) == before:
         return False
-    save_quotes(bot, quotes)
+    save_quotes(quotes)
     return True
 
-def edit_quote(bot, quote_id, new_text):
+def edit_quote(quote_id, new_text):
     quotes = load_quotes()
     for q in quotes:
         if q["id"] == quote_id:
             q["text"] = new_text
-            save_quotes(bot, quotes)
+            save_quotes(quotes)
             return True
     return False
 
