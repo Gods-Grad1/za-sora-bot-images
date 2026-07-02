@@ -27,18 +27,16 @@ apihelper.proxy = None
 bot = telebot.TeleBot(config.API_TOKEN)
 database.set_bot(bot)
 
-# Global start time for uptime tracking
 BOT_START_TIME = time.time()
-
-# Initialize broadcast database
 database.init_broadcast_db()
 
 # ---------------------------------------------------------------------------
-# SCHEDULER STATE (Remote on GitHub with local fallback)
+# SCHEDULER STATE (Local file – with debug)
 # ---------------------------------------------------------------------------
 
 def load_scheduler():
-    data = database.load_remote_json(config.SCHEDULER_FILE, {
+    """Load scheduler from local file."""
+    data = database.load_json(config.SCHEDULER_FILE, {
         "enabled": False,
         "interval": 60,
         "game_type": "random",
@@ -49,20 +47,18 @@ def load_scheduler():
         "last_morning_date": "",
         "schedule_message_id": None,
     })
-    print(f"📅 Scheduler loaded: enabled={data.get('enabled')}, interval={data.get('interval')}, last_game={data.get('last_game')}")
+    print(f"📅 Scheduler loaded: {data.get('schedule_message_id')}")
     return data
 
 def save_scheduler(data):
-    print(f"💾 Saving scheduler: enabled={data.get('enabled')}, interval={data.get('interval')}, last_game={data.get('last_game')}")
-    # Save to GitHub (with local fallback)
-    success = database.save_remote_json(config.SCHEDULER_FILE, data)
-    if not success:
-        # Fallback: save to local file as well
-        with open(config.SCHEDULER_FILE, 'w') as f:
-            json.dump(data, f, indent=4)
-        print("⚠️ Scheduler saved locally (GitHub failed).")
+    """Save scheduler to local file."""
+    print(f"💾 Saving scheduler with message_id={data.get('schedule_message_id')}")
+    database.save_json(bot, config.SCHEDULER_FILE, data)
+    # Quick check if file exists
+    if os.path.exists(config.SCHEDULER_FILE):
+        print(f"✅ Scheduler file exists: {config.SCHEDULER_FILE}")
     else:
-        print("✅ Scheduler saved to GitHub.")
+        print(f"❌ Scheduler file NOT found after save!")
 
 # ---------------------------------------------------------------------------
 # HELPERS
@@ -395,7 +391,7 @@ def show_admin_panel(message):
     bot.send_message(message.chat.id, f"⚙️ *ADMIN PANEL*\n\nAuto-scheduler: {status_icon} {'ON' if sched.get('enabled') else 'OFF'}\nInterval: every {sched.get('interval', 60)} min\nGame type: {sched.get('game_type', 'random').title()}\nActive window: {sched.get('window_start', 10)}:00 — {sched.get('window_end', 23)}:00", reply_markup=markup, parse_mode="Markdown")
 
 # ---------------------------------------------------------------------------
-# SCHEDULE PANEL – BUILD & SHOW (REMOVED START/END BUTTONS)
+# SCHEDULE PANEL – BUILD & SHOW (with debug and fallback)
 # ---------------------------------------------------------------------------
 
 def _build_schedule_panel(chat_id):
@@ -428,26 +424,32 @@ def _build_schedule_panel(chat_id):
 def show_schedule_panel(chat_id, edit_message_id=None):
     sched = load_scheduler()
     text, markup = _build_schedule_panel(chat_id)
+    print(f"🔄 show_schedule_panel: edit_message_id={edit_message_id}")
+    print(f"📅 Current scheduler message_id: {sched.get('schedule_message_id')}")
 
+    # If we have an edit_message_id, use it
     if edit_message_id:
         try:
             bot.edit_message_text(text, chat_id, edit_message_id, reply_markup=markup, parse_mode="Markdown")
+            print(f"✅ Edited message {edit_message_id} successfully.")
             return
         except Exception as e:
-            print(f"Failed to edit schedule panel: {e}")
+            print(f"❌ Failed to edit schedule panel: {e}")
+            # Fall through to send a new one
 
     # Send new message and store its ID
     msg = bot.send_message(chat_id, text, reply_markup=markup, parse_mode="Markdown")
     sched["schedule_message_id"] = msg.message_id
     save_scheduler(sched)
     print(f"💬 New schedule panel sent, message_id={msg.message_id}")
+    print(f"💾 Scheduler saved with message_id={sched['schedule_message_id']}")
 
 # ---------------------------------------------------------------------------
 # STATS
 # ---------------------------------------------------------------------------
 
 def show_stats(chat_id):
-    data = database.load_remote_json(config.GROUP_DATA_FILE, {})
+    data = database.load_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     if chat_str not in data:
         bot.send_message(chat_id, "📊 No stats yet.")
@@ -703,7 +705,7 @@ def handle_document(message):
         else:
             bot.reply_to(message, f"❌ Failed to upload: {put_resp.text}")
         
-        database.save_json("upload_state.json", {"pending": False})
+        database.save_json(bot, "upload_state.json", {"pending": False})
     except Exception as e:
         bot.reply_to(message, f"❌ Error: {e}")
 
@@ -713,7 +715,7 @@ def welcome_new_member(message):
         if member.is_bot:
             continue
         username = member.username or member.first_name
-        database.track_member(message.chat.id, member.id, username)
+        database.track_member(bot, message.chat.id, member.id, username)
         members  = database.get_all_members(message.chat.id)
         tag_line = " ".join([f"[{n}](tg://user?id={uid})" for uid, n in members if uid != member.id])
         welcome = (
@@ -732,7 +734,7 @@ def handle_all_messages(message):
     username = message.from_user.username or message.from_user.first_name
     chat_id  = message.chat.id
 
-    database.track_member(chat_id, user_id, username)
+    database.track_member(bot, chat_id, user_id, username)
 
     if games.check_user_answer(bot, message):
         return
@@ -809,7 +811,7 @@ def handle_all_messages(message):
         show_shop(message)
 
     elif cmd == '/powerups':
-        data = database.load_remote_json(config.GROUP_DATA_FILE, {})
+        data = database.load_json(config.GROUP_DATA_FILE, {})
         chat_str = str(chat_id)
         user_str = str(user_id)
         if chat_str not in data or user_str not in data[chat_str]:
@@ -932,7 +934,7 @@ def handle_all_messages(message):
             bot.reply_to(message, "❌ User not found.")
             return
         target_id, target_name = target
-        database.mute_user(chat_id, target_id, target_name, seconds)
+        database.mute_user(bot, chat_id, target_id, target_name, seconds)
         bot.reply_to(message, f"✅ Muted {target_name} for {num}{unit}.")
 
     elif cmd == '/unmute' and is_admin(user_id):
@@ -946,7 +948,7 @@ def handle_all_messages(message):
             bot.reply_to(message, "❌ User not found.")
             return
         target_id, target_name = target
-        if database.unmute_user(chat_id, target_id):
+        if database.unmute_user(bot, chat_id, target_id):
             bot.reply_to(message, f"✅ Unmuted {target_name}.")
         else:
             bot.reply_to(message, f"❌ {target_name} was not muted.")
@@ -956,7 +958,7 @@ def handle_all_messages(message):
                               "The file should contain questions for a single category.\n"
                               "Use the 'category' field to indicate which category.\n"
                               "Supported formats: JSON or CSV.")
-        database.save_json("upload_state.json", {"user_id": user_id, "chat_id": chat_id, "pending": True})
+        database.save_json(bot, "upload_state.json", {"user_id": user_id, "chat_id": chat_id, "pending": True})
         return
 
     elif cmd == '/broadcast' and is_admin(user_id):
@@ -983,7 +985,7 @@ def handle_all_messages(message):
             return
         
         tag_all = True
-        database.add_broadcast(None, message_text, send_time)
+        database.add_broadcast(bot, None, message_text, send_time)
         sched = load_scheduler()
         sched[f"broadcast_tagall_{send_time}"] = tag_all
         save_scheduler(sched)
@@ -1027,7 +1029,7 @@ def handle_all_messages(message):
             bot.reply_to(message, "📋 Pending broadcasts:\n" + "\n".join(lines))
 
     elif cmd == '/trackgroup' and is_admin(user_id):
-        database.track_member(chat_id, user_id, username)
+        database.track_member(bot, chat_id, user_id, username)
         bot.reply_to(message, "✅ This group is now tracked in the database.")
 
     elif cmd == '/generateall' and is_admin(user_id):
@@ -1046,7 +1048,7 @@ def handle_all_messages(message):
             bot.reply_to(message, "Usage: /addquote [quote text]")
             return
         text    = " ".join(args)
-        new_id  = database.add_quote(text)
+        new_id  = database.add_quote(bot, text)
         bot.reply_to(message, f"✅ Quote #{new_id} added!")
 
     elif cmd == '/listquotes' and is_admin(user_id):
@@ -1057,7 +1059,7 @@ def handle_all_messages(message):
         if not args or not args[0].isdigit():
             bot.reply_to(message, "Usage: /deletequote [id]")
             return
-        if database.delete_quote(int(args[0])):
+        if database.delete_quote(bot, int(args[0])):
             bot.reply_to(message, f"✅ Quote #{args[0]} deleted.")
         else:
             bot.reply_to(message, f"❌ Quote #{args[0]} not found.")
@@ -1067,7 +1069,7 @@ def handle_all_messages(message):
             bot.reply_to(message, "Usage: /editquote [id] [new text]")
             return
         new_text = " ".join(args[1:])
-        if database.edit_quote(int(args[0]), new_text):
+        if database.edit_quote(bot, int(args[0]), new_text):
             bot.reply_to(message, f"✅ Quote #{args[0]} updated.")
         else:
             bot.reply_to(message, f"❌ Quote #{args[0]} not found.")
@@ -1076,7 +1078,7 @@ def handle_all_messages(message):
         if not args or not args[0].isdigit():
             bot.reply_to(message, "Usage: /previewquote [id]")
             return
-        q = database.get_quote(int(args[0]))
+        q = database.get_quote(bot, int(args[0]))
         if q:
             bot.reply_to(message, f"📖 *Preview — Quote #{q['id']}*\n\n_{q['text']}_\n\n— *{q['author']}*", parse_mode="Markdown")
         else:
@@ -1097,7 +1099,7 @@ def handle_status(message):
     total_members = 0
     for gid in groups:
         total_members += len(database.get_all_members(gid))
-    data = database.load_remote_json(config.GROUP_DATA_FILE, {})
+    data = database.load_json(config.GROUP_DATA_FILE, {})
     total_entries = sum(len(u) for u in data.values())
 
     broadcast_alive = broadcast_checker_thread and broadcast_checker_thread.is_alive()
@@ -1128,11 +1130,11 @@ def handle_spin(message):
     user_id = message.from_user.id
     username = message.from_user.username or message.from_user.first_name
 
-    if database.is_muted(chat_id, user_id):
+    if database.is_muted(bot, chat_id, user_id):
         bot.reply_to(message, "🔇 You are muted! Wait until your mute expires.")
         return
 
-    data = database.load_remote_json(config.GROUP_DATA_FILE, {})
+    data = database.load_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(user_id)
     u = database.get_user(data, chat_str, user_str, username)
@@ -1168,27 +1170,27 @@ def handle_spin(message):
             year_key = database._now_year_key()
             u["monthly_points"][month_key] = u["monthly_points"].get(month_key, 0) + points
             u["yearly_points"][year_key] = u["yearly_points"].get(year_key, 0) + points
-            database.save_remote_json(config.GROUP_DATA_FILE, data)
+            database.save_json(bot, config.GROUP_DATA_FILE, data)
             response += f"🎉 You won *{points} points*!"
         elif points < 0:
             u["points"] = max(0, u["points"] + points)
-            database.save_remote_json(config.GROUP_DATA_FILE, data)
+            database.save_json(bot, config.GROUP_DATA_FILE, data)
             response += f"💸 You lost *{abs(points)} points*! 😱"
         else:
             response += f"😐 Nothing! Try again tomorrow."
     elif result.get("hint_token"):
         tokens = result["hint_token"]
         u["hint_tokens"] = u.get("hint_tokens", 0) + tokens
-        database.save_remote_json(config.GROUP_DATA_FILE, data)
+        database.save_json(bot, config.GROUP_DATA_FILE, data)
         response += f"💡 You won *{tokens} hint token(s)*!"
     elif result.get("double_xp"):
         duration = result["double_xp"]
         u["double_xp_until"] = time.time() + duration
-        database.save_remote_json(config.GROUP_DATA_FILE, data)
+        database.save_json(bot, config.GROUP_DATA_FILE, data)
         response += f"⚡ You won *Double XP for 1 hour*!"
     elif result.get("bankrupt"):
         u["points"] = max(0, u["points"] - 10)
-        database.save_remote_json(config.GROUP_DATA_FILE, data)
+        database.save_json(bot, config.GROUP_DATA_FILE, data)
         response += f"💸 *BANKRUPT!* You lost 10 points. 😱"
     else:
         response += f"🎁 You won *{result['name']}*!"
@@ -1196,7 +1198,7 @@ def handle_spin(message):
     bot.reply_to(message, response, parse_mode="Markdown")
 
 # ---------------------------------------------------------------------------
-# CALLBACK HANDLER
+# CALLBACK HANDLER – with fallback for editing
 # ---------------------------------------------------------------------------
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -1306,7 +1308,7 @@ def handle_all_callbacks(call):
         if data.startswith("shop_"):
             item_id  = data.replace("shop_", "")
             username = call.from_user.username or call.from_user.first_name
-            ok, msg  = database.purchase_item(chat_id, user_id, username, item_id)
+            ok, msg  = database.purchase_item(bot, chat_id, user_id, username, item_id)
             bot.answer_callback_query(call.id, msg, show_alert=True)
             return
 
@@ -1353,7 +1355,7 @@ def handle_all_callbacks(call):
                 bot.send_message(chat_id, "✅ Check complete. Admin has been notified.")
             elif action == "trackgroup":
                 bot.answer_callback_query(call.id)
-                database.track_member(chat_id, user_id, username)
+                database.track_member(bot, chat_id, user_id, username)
                 bot.send_message(chat_id, "✅ This group is now tracked in the database.")
             elif action == "back":
                 sched = load_scheduler()
@@ -1371,7 +1373,7 @@ def handle_all_callbacks(call):
             return
 
         # -------------------------------------------------------------------
-        # SCHEDULER SETTINGS – Edit in place
+        # SCHEDULER SETTINGS – Edit in place with fallback
         # -------------------------------------------------------------------
         if data.startswith("sched_") and is_admin(user_id):
             sched  = load_scheduler()
@@ -1394,12 +1396,18 @@ def handle_all_callbacks(call):
                 save_scheduler(sched)
                 bot.answer_callback_query(call.id, f"Time limit set to {sched['answer_time_limit']}s", show_alert=True)
 
-            # After updating, edit the existing message
+            # Try to edit the stored message ID; if it fails, fall back to the current message
             msg_id = sched.get("schedule_message_id")
             if msg_id:
-                show_schedule_panel(chat_id, edit_message_id=msg_id)
+                try:
+                    show_schedule_panel(chat_id, edit_message_id=msg_id)
+                except Exception as e:
+                    print(f"Editing stored msg {msg_id} failed: {e}")
+                    # Fallback: edit the message the button came from
+                    show_schedule_panel(chat_id, edit_message_id=call.message.message_id)
             else:
-                show_schedule_panel(chat_id)
+                # No stored ID – edit the current message
+                show_schedule_panel(chat_id, edit_message_id=call.message.message_id)
             return
 
         if data == "tagall_confirm" and is_admin(user_id):
@@ -1641,7 +1649,7 @@ def broadcast_checker():
         database.log_error_to_admin(bot, "Broadcast Checker FATAL", fatal)
 
 # ---------------------------------------------------------------------------
-# BACKGROUND SCHEDULER (with spam prevention)
+# BACKGROUND SCHEDULER
 # ---------------------------------------------------------------------------
 
 scheduler_thread = None
@@ -1690,8 +1698,8 @@ def background_scheduler():
                     time.sleep(61)
 
                 if hour == 0 and minute == 1:
-                    database.check_and_run_monthly_reset()
-                    database.check_and_run_yearly_reset()
+                    database.check_and_run_monthly_reset(bot)
+                    database.check_and_run_yearly_reset(bot)
                     time.sleep(61)
 
                 if sched.get("enabled"):
@@ -1730,6 +1738,8 @@ def background_scheduler():
                             sched["last_game"] = now_ts
                             save_scheduler(sched)
                             print(f"✅ Started {game_type} game(s) in {len(groups)} groups.")
+                        else:
+                            print("ℹ️ No games started (all groups had active games).")
 
             except Exception as e:
                 print(f"Scheduler error: {e}")
@@ -1761,7 +1771,6 @@ def start_scheduler():
     scheduler_thread.start()
 
 def thread_supervisor():
-    """Monitors critical threads and restarts them if they die."""
     while True:
         try:
             if not broadcast_checker_thread or not broadcast_checker_thread.is_alive():
@@ -2031,7 +2040,7 @@ def show_my_stats(message, target_id=None, target_name=None):
         target_id = message.from_user.id
         target_name = message.from_user.username or message.from_user.first_name
 
-    data = database.load_remote_json(config.GROUP_DATA_FILE, {})
+    data = database.load_json(config.GROUP_DATA_FILE, {})
     chat_str = str(chat_id)
     user_str = str(target_id)
     if chat_str not in data or user_str not in data[chat_str]:
@@ -2130,8 +2139,8 @@ if __name__ == "__main__":
     register_commands()
     games.precache_assets(bot)
     threading.Thread(target=graphics.clear_and_rebuild_disk_cache, args=(bot,), daemon=True).start()
-    database.check_and_run_monthly_reset()
-    database.cleanup_expired_mutes()
+    database.check_and_run_monthly_reset(bot)
+    database.cleanup_expired_mutes(bot)
     check_startup_fallbacks()
 
     start_broadcast_checker()
