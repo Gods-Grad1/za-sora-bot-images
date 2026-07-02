@@ -34,11 +34,11 @@ BOT_START_TIME = time.time()
 database.init_broadcast_db()
 
 # ---------------------------------------------------------------------------
-# SCHEDULER STATE (Remote on GitHub)
+# SCHEDULER STATE (Remote on GitHub with local fallback)
 # ---------------------------------------------------------------------------
 
 def load_scheduler():
-    return database.load_remote_json(config.SCHEDULER_FILE, {
+    data = database.load_remote_json(config.SCHEDULER_FILE, {
         "enabled": False,
         "interval": 60,
         "game_type": "random",
@@ -49,9 +49,20 @@ def load_scheduler():
         "last_morning_date": "",
         "schedule_message_id": None,
     })
+    print(f"📅 Scheduler loaded: enabled={data.get('enabled')}, interval={data.get('interval')}, last_game={data.get('last_game')}")
+    return data
 
 def save_scheduler(data):
-    database.save_remote_json(config.SCHEDULER_FILE, data)
+    print(f"💾 Saving scheduler: enabled={data.get('enabled')}, interval={data.get('interval')}, last_game={data.get('last_game')}")
+    # Save to GitHub (with local fallback)
+    success = database.save_remote_json(config.SCHEDULER_FILE, data)
+    if not success:
+        # Fallback: save to local file as well
+        with open(config.SCHEDULER_FILE, 'w') as f:
+            json.dump(data, f, indent=4)
+        print("⚠️ Scheduler saved locally (GitHub failed).")
+    else:
+        print("✅ Scheduler saved to GitHub.")
 
 # ---------------------------------------------------------------------------
 # HELPERS
@@ -425,9 +436,11 @@ def show_schedule_panel(chat_id, edit_message_id=None):
         except Exception as e:
             print(f"Failed to edit schedule panel: {e}")
 
+    # Send new message and store its ID
     msg = bot.send_message(chat_id, text, reply_markup=markup, parse_mode="Markdown")
     sched["schedule_message_id"] = msg.message_id
     save_scheduler(sched)
+    print(f"💬 New schedule panel sent, message_id={msg.message_id}")
 
 # ---------------------------------------------------------------------------
 # STATS
@@ -1381,6 +1394,7 @@ def handle_all_callbacks(call):
                 save_scheduler(sched)
                 bot.answer_callback_query(call.id, f"Time limit set to {sched['answer_time_limit']}s", show_alert=True)
 
+            # After updating, edit the existing message
             msg_id = sched.get("schedule_message_id")
             if msg_id:
                 show_schedule_panel(chat_id, edit_message_id=msg_id)
@@ -1627,7 +1641,7 @@ def broadcast_checker():
         database.log_error_to_admin(bot, "Broadcast Checker FATAL", fatal)
 
 # ---------------------------------------------------------------------------
-# BACKGROUND SCHEDULER
+# BACKGROUND SCHEDULER (with spam prevention)
 # ---------------------------------------------------------------------------
 
 scheduler_thread = None
@@ -1686,27 +1700,36 @@ def background_scheduler():
                     in_window    = window_start <= hour < window_end
                     interval_sec = sched.get("interval", 60) * 60
                     last_game    = sched.get("last_game", 0)
+                    now_ts       = time.time()
 
-                    if in_window and (time.time() - last_game) >= interval_sec:
+                    if in_window and (now_ts - last_game) >= interval_sec:
+                        print(f"⏳ Scheduler: in_window={in_window}, diff={now_ts - last_game}, interval={interval_sec}")
                         game_type = sched.get("game_type", "random")
                         if game_type == "random":
                             game_type = random.choice(["character", "year", "picture", "trivia"])
 
                         groups = database.get_all_groups()
+                        started_any = False
                         for g_id in groups:
                             if games._is_game_active(g_id) or g_id in games.versus_games:
                                 continue
                             if game_type == "character":
                                 games.start_character_game(bot, g_id)
+                                started_any = True
                             elif game_type == "year":
                                 games.start_year_game(bot, g_id)
+                                started_any = True
                             elif game_type == "picture":
                                 games.start_picture_game(bot, g_id)
+                                started_any = True
                             elif game_type == "trivia":
                                 games.start_trivia_game(bot, g_id)
+                                started_any = True
 
-                        sched["last_game"] = time.time()
-                        save_scheduler(sched)
+                        if started_any:
+                            sched["last_game"] = now_ts
+                            save_scheduler(sched)
+                            print(f"✅ Started {game_type} game(s) in {len(groups)} groups.")
 
             except Exception as e:
                 print(f"Scheduler error: {e}")
