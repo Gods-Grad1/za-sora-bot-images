@@ -25,7 +25,7 @@ os.environ['NO_PROXY'] = '*'
 apihelper.proxy = None
 
 bot = telebot.TeleBot(config.API_TOKEN)
-database.set_bot(bot)  # <-- CRITICAL: sets the global bot instance for database.py
+database.set_bot(bot)
 
 # Global start time for uptime tracking
 BOT_START_TIME = time.time()
@@ -415,11 +415,6 @@ def _build_schedule_panel(chat_id):
     return text, markup
 
 def show_schedule_panel(chat_id, edit_message_id=None):
-    """
-    Shows the schedule panel. If edit_message_id is provided, edits that message.
-    Otherwise, sends a new message and stores its ID.
-    If edit fails, sends a new message and stores the new ID.
-    """
     sched = load_scheduler()
     text, markup = _build_schedule_panel(chat_id)
 
@@ -429,9 +424,7 @@ def show_schedule_panel(chat_id, edit_message_id=None):
             return
         except Exception as e:
             print(f"Failed to edit schedule panel: {e}")
-            # Fall through to send a new one
 
-    # Send new message and store its ID
     msg = bot.send_message(chat_id, text, reply_markup=markup, parse_mode="Markdown")
     sched["schedule_message_id"] = msg.message_id
     save_scheduler(sched)
@@ -516,7 +509,6 @@ def send_morning_message(bot):
                     f"Let's have a great day! 🙏🔥"
                 )
 
-                # --- COMBINED TAGS (same message) ---
                 members = database.get_all_members(group_id)
                 if members:
                     tag_line = "🌱 _Sending love to the whole family_ 🌱\n" + " ".join(
@@ -540,7 +532,6 @@ def send_morning_message(bot):
                 print(f"❌ Morning message failed for {group_id}: {e}")
                 database.log_error_to_admin(bot, "Morning Message", e)
 
-        # Update last_morning_date after all groups succeed
         sched = load_scheduler()
         sched["last_morning_date"] = local_now().strftime("%Y-%m-%d")
         save_scheduler(sched)
@@ -561,7 +552,6 @@ def _send_pending_broadcasts(bot):
     for broadcast in pending:
         success = True
         sched = load_scheduler()
-        # Always tag – force flag if not set
         if f"broadcast_tagall_{broadcast['send_time']}" not in sched:
             tag_all = True
             sched[f"broadcast_tagall_{broadcast['send_time']}"] = True
@@ -642,7 +632,6 @@ def handle_document(message):
         content = response.content.decode('utf-8')
         filename = message.document.file_name.lower()
         
-        # Parse the file
         if filename.endswith('.json'):
             import json
             new_questions = json.loads(content)
@@ -655,7 +644,6 @@ def handle_document(message):
             bot.reply_to(message, "❌ Unsupported file format. Use JSON or CSV.")
             return
         
-        # Determine category from the first question
         if not new_questions:
             bot.reply_to(message, "❌ No questions found in file.")
             return
@@ -664,13 +652,11 @@ def handle_document(message):
             bot.reply_to(message, "❌ Missing 'category' field in questions.")
             return
         
-        # Find the correct filename for this category
         filename = config.TRIVIA_CATEGORY_FILES.get(cat)
         if not filename:
             bot.reply_to(message, f"❌ Unknown category: {cat}. Supported: {', '.join(config.TRIVIA_CATEGORY_FILES.keys())}")
             return
         
-        # Download existing file from generated branch
         url = f"https://api.github.com/repos/{config.GITHUB_REPO}/contents/{config.TRIVIA_REMOTE_PATH}/{filename}?ref={config.TRIVIA_BRANCH}"
         headers = {"Authorization": f"token {config.GITHUB_TOKEN}"}
         resp = requests.get(url, headers=headers)
@@ -682,17 +668,14 @@ def handle_document(message):
             existing_data = json.loads(decoded)
             sha = content_data['sha']
         else:
-            # File might not exist yet – we'll create it
             pass
         
-        # Merge new questions with new IDs
         max_id = max([q['id'] for q in existing_data], default=0)
         for q in new_questions:
             max_id += 1
             q['id'] = max_id
             existing_data.append(q)
         
-        # Upload back to generated branch
         payload = {
             "message": f"Add {len(new_questions)} trivia questions to {cat}",
             "content": base64.b64encode(json.dumps(existing_data, indent=2).encode()).decode(),
@@ -703,7 +686,6 @@ def handle_document(message):
         put_resp = requests.put(f"https://api.github.com/repos/{config.GITHUB_REPO}/contents/{config.TRIVIA_REMOTE_PATH}/{filename}", headers=headers, json=payload)
         if put_resp.status_code in (200, 201):
             bot.reply_to(message, f"✅ Added {len(new_questions)} questions to {cat} category on the generated branch.")
-            # Clear cache so next trivia game loads fresh
             database.reload_trivia()
         else:
             bot.reply_to(message, f"❌ Failed to upload: {put_resp.text}")
@@ -739,7 +721,6 @@ def handle_all_messages(message):
 
     database.track_member(chat_id, user_id, username)
 
-    # Game answer check first
     if games.check_user_answer(bot, message):
         return
 
@@ -988,9 +969,7 @@ def handle_all_messages(message):
             bot.reply_to(message, "❌ Please provide a message.")
             return
         
-        # Always tag all members – removed flag check
         tag_all = True
-        
         database.add_broadcast(None, message_text, send_time)
         sched = load_scheduler()
         sched[f"broadcast_tagall_{send_time}"] = tag_all
@@ -1002,7 +981,6 @@ def handle_all_messages(message):
             _send_pending_broadcasts(bot)
         return
 
-    # --- NEW: /setwindow command ---
     elif cmd == '/setwindow' and is_admin(user_id):
         if len(args) != 2 or not args[0].isdigit() or not args[1].isdigit():
             bot.reply_to(message, "Usage: /setwindow <start_hour> <end_hour>\nExample: /setwindow 10 23")
@@ -1016,7 +994,6 @@ def handle_all_messages(message):
         sched["window_start"] = start
         sched["window_end"] = end
         save_scheduler(sched)
-        # Edit the existing schedule panel if it exists
         msg_id = sched.get("schedule_message_id")
         if msg_id:
             try:
@@ -1381,7 +1358,7 @@ def handle_all_callbacks(call):
             return
 
         # -------------------------------------------------------------------
-        # SCHEDULER SETTINGS – Edit in place (all buttons)
+        # SCHEDULER SETTINGS – Edit in place
         # -------------------------------------------------------------------
         if data.startswith("sched_") and is_admin(user_id):
             sched  = load_scheduler()
@@ -1404,7 +1381,6 @@ def handle_all_callbacks(call):
                 save_scheduler(sched)
                 bot.answer_callback_query(call.id, f"Time limit set to {sched['answer_time_limit']}s", show_alert=True)
 
-            # After any change, edit the existing message if possible
             msg_id = sched.get("schedule_message_id")
             if msg_id:
                 show_schedule_panel(chat_id, edit_message_id=msg_id)
@@ -1668,29 +1644,24 @@ def background_scheduler():
 
                 sched = load_scheduler()
 
-                # Morning message
                 if hour == config.MORNING_MSG_HOUR and minute == config.MORNING_MSG_MIN:
                     print("🌅 Sending morning message...")
                     send_morning_message(bot)
                     time.sleep(61)
 
-                # Weekly recap
                 if now.weekday() == 0 and hour == 9 and minute == 0:
                     print("📊 Sending weekly recap...")
                     send_weekly_recap(bot)
                     time.sleep(61)
 
-                # Daily challenge
                 if hour == config.DAILY_CHALLENGE_HOUR and minute == config.DAILY_CHALLENGE_MIN:
                     games.post_daily_challenge(bot)
                     time.sleep(61)
 
-                # Sunday cache rebuild
                 if now.weekday() == 6 and hour == 0 and minute == 0:
                     graphics.clear_and_rebuild_disk_cache(bot)
                     time.sleep(61)
 
-                # Sunday standings broadcast
                 if now.weekday() == 6 and hour == 12 and minute == 0:
                     groups  = database.get_all_groups()
                     img_data = graphics.generate_table_image(bot)
@@ -1704,13 +1675,11 @@ def background_scheduler():
                         if hasattr(img_data, 'close'): img_data.close()
                     time.sleep(61)
 
-                # Monthly & yearly reset
                 if hour == 0 and minute == 1:
                     database.check_and_run_monthly_reset()
                     database.check_and_run_yearly_reset()
                     time.sleep(61)
 
-                # Auto game scheduler
                 if sched.get("enabled"):
                     window_start = sched.get("window_start", config.SCHEDULER_WINDOW_START)
                     window_end   = sched.get("window_end",   config.SCHEDULER_WINDOW_END)
@@ -2096,10 +2065,8 @@ def show_my_stats(message, target_id=None, target_name=None):
         f"{xp_status}"
     )
 
-    # Send stats as a photo with the profile banner as the image
     try:
         banner_url_or_path = profile_banner.generate_profile_banner(bot, target_id, target_name, chat_id)
-        
         if banner_url_or_path:
             if banner_url_or_path.startswith("http"):
                 bot.send_photo(chat_id, banner_url_or_path, caption=text, parse_mode="Markdown")
@@ -2110,7 +2077,6 @@ def show_my_stats(message, target_id=None, target_name=None):
     except Exception as e:
         print(f"Banner generation failed for {target_id}: {e}")
     
-    # Fallback: send plain text if banner is unavailable
     if target_id == message.from_user.id:
         bot.reply_to(message, text, parse_mode="Markdown")
     else:
